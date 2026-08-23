@@ -1,26 +1,336 @@
-@import "tailwindcss";
+@import url('https://googleapis.com');
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --neon: #42ff5a;
+  --nd: rgba(66, 255, 90, 0.3);
+  --ng: rgba(66, 255, 90, 0.15);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+html,
+body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #020206;
+  font-family: 'Outfit', sans-serif;
+  color: #fff;
+}
+
+#c3d {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.gbg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  background-image: linear-gradient(rgba(66, 255, 90, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(66, 255, 90, 0.025) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 20%, transparent 70%);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 20%, transparent 70%);
+}
+
+.hero {
+  position: relative;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  width: 100vw;
+  height: 100dvh;
+  perspective: 1200px;
+  pointer-events: none;
+}
+
+.lw {
+  position: relative;
+  z-index: 10;
+  width: min(85vw, 950px);
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: transform 0.1s ease-out;
+  animation: lr 1.2s cubic-bezier(0.16, 1, 0.3, 1) 0.3s both;
+  pointer-events: auto;
+}
+
+@keyframes lr {
+  0% {
+    opacity: 0;
+    transform: scale(1.05) translateY(15px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
   }
 }
 
-body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+.lw img.main-logo {
+  position: relative;
+  z-index: 2;
+  display: block;
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 0 20px rgba(66, 255, 90, 0.1));
+  transition: filter 0.4s ease;
+}
+
+/* Logo glow layer — sits behind the logo image */
+.logo-glow {
+  position: absolute;
+  inset: -30%;
+  z-index: 1;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center, rgba(66, 255, 90, 0.25) 0%, rgba(66, 255, 90, 0.08) 30%, transparent 65%);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  pointer-events: none;
+}
+
+.gl {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  opacity: 0;
+  mix-blend-mode: screen;
+  will-change: transform, clip-path, opacity;
+  pointer-events: none;
+}
+
+.gl img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.gl-r {
+  filter: sepia(1) saturate(14) hue-rotate(300deg) brightness(1.3);
+}
+
+.gl-c {
+  filter: sepia(1) saturate(14) hue-rotate(75deg) brightness(1.2);
+}
+
+.gl-w {
+  filter: brightness(2) contrast(1.3);
+}
+
+.es {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: linear-gradient(105deg, transparent 30%, rgba(195, 255, 205, 0.5) 45%, rgba(66, 255, 90, 0.2) 48%, transparent 55%);
+  opacity: 0;
+  mix-blend-mode: screen;
+  transform: translateX(-150%);
+  animation: esw 2s cubic-bezier(0.22, 1, 0.36, 1) 0.5s forwards;
+  pointer-events: none;
+}
+
+@keyframes esw {
+  0% {
+    opacity: 0;
+    transform: translateX(-150%);
+  }
+  20% {
+    opacity: 0.8;
+  }
+  100% {
+    opacity: 0;
+    transform: translateX(250%);
+  }
+}
+
+.nb {
+  position: absolute;
+  left: -5%;
+  z-index: 10;
+  width: 110%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--neon) 20%, #fff 40%, transparent 55%, var(--neon) 70%, #fff 85%, transparent);
+  opacity: 0;
+  mix-blend-mode: screen;
+  pointer-events: none;
+}
+
+.sub {
+  z-index: 2;
+  text-align: center;
+  animation: fu 1s ease 1.2s both;
+}
+
+.sub .tg {
+  color: var(--neon);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(0.75rem, 1.5vw, 1.1rem);
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  text-shadow: 0 0 20px var(--ng);
+  opacity: 0.8;
+}
+
+.sub .dt {
+  margin-top: 0.5rem;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: clamp(0.65rem, 1.2vw, 0.9rem);
+  letter-spacing: 0.15em;
+}
+
+.cg {
+  z-index: 2;
+  display: flex;
+  gap: 1rem;
+  animation: fu 1s ease 1.6s both;
+}
+
+.cb {
+  position: relative;
+  padding: 0.85em 2.2em;
+  overflow: hidden;
+  color: var(--neon);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: clamp(0.7rem, 1.2vw, 0.85rem);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  background: transparent;
+  border: 1px solid var(--neon);
+  border-radius: 2px;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+
+.cb::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background: var(--neon);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+
+.cb:hover {
+  color: #000;
+  box-shadow: 0 0 30px var(--nd), 0 0 60px var(--ng);
+}
+
+.cb:hover::before {
+  opacity: 1;
+}
+
+.cb.s {
+  color: rgba(255, 255, 255, 0.5);
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.cb.s:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.4);
+}
+
+.cb.s::before {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.cf {
+  position: fixed;
+  z-index: 0;
+  width: 400px;
+  height: 400px;
+  background: radial-gradient(circle, rgba(66, 255, 90, 0.08) 0%, transparent 60%);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  transition: left 0.12s ease-out, top 0.12s ease-out;
+  pointer-events: none;
+}
+
+@keyframes fu {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.sh {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  z-index: 2;
+  transform: translateX(-50%);
+  animation: fu 1s ease 2.2s both;
+}
+
+.sh span {
+  display: block;
+  width: 1px;
+  height: 40px;
+  margin: 0 auto;
+  background: linear-gradient(to bottom, var(--neon), transparent);
+  animation: sp 2s ease-in-out infinite;
+}
+
+@keyframes sp {
+  0%, 100% {
+    opacity: 0.3;
+    transform: scaleY(0.7);
+  }
+  50% {
+    opacity: 0.8;
+    transform: scaleY(1);
+  }
+}
+
+@media (max-width: 768px) {
+  .hero {
+    gap: 1.2rem;
+    padding: 0 1rem;
+  }
+  .lw {
+    width: 98vw;
+  }
+  .cg {
+    flex-direction: column;
+    align-items: center;
+  }
+  .cb {
+    padding: 0.75em 1.8em;
+    font-size: 0.7rem;
+  }
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+  .hero {
+    gap: 1rem;
+  }
+  .lw {
+    width: 92vw;
+  }
+}
+
+@media (max-width: 900px) and (orientation: landscape) and (max-height: 520px) {
+  .hero {
+    gap: 0.5rem;
+  }
+  .lw {
+    width: 52vw;
+  }
+  .sh {
+    bottom: 0.6rem;
+  }
 }
