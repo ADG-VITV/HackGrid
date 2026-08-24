@@ -31,7 +31,7 @@ function mWire(c,o=.18){return new THREE.MeshBasicMaterial({color:c,wireframe:tr
 function mEdge(c,o=.45){return new THREE.LineBasicMaterial({color:c,transparent:true,opacity:o,blending:THREE.AdditiveBlending,depthWrite:false})}
 const uWobble={value:0};
 function mGlass(c,ei=.2){
-  const m=new THREE.MeshPhysicalMaterial({color:c,emissive:c,emissiveIntensity:ei,metalness:0,roughness:.04,transmission:.95,thickness:2.2,ior:2.3,transparent:true,opacity:.4,clearcoat:1,clearcoatRoughness:.02,side:THREE.DoubleSide});
+  const m=new THREE.MeshPhysicalMaterial({color:c,emissive:c,emissiveIntensity:ei,metalness:0,roughness:.04,transmission:0,thickness:2.2,ior:1,transparent:true,opacity:.4,clearcoat:0,clearcoatRoughness:.02,side:THREE.DoubleSide});
   m.onBeforeCompile=sh=>{
     sh.uniforms.uTime=uWobble;
     sh.vertexShader='uniform float uTime;\n'+sh.vertexShader.replace('#include <begin_vertex>',
@@ -101,22 +101,6 @@ for(let i=0;i<COUNT;i++){
   });
 }
 
-/* ════════ DUST PARTICLES ════════ */
-const DC=mob?400:1200;
-const dg=new THREE.BufferGeometry(),da=new Float32Array(DC*3);
-for(let i=0;i<DC;i++){
-  da[i*3]=(Math.random()-.5)*60;
-  da[i*3+1]=(Math.random()-.5)*40;
-  da[i*3+2]=(Math.random()-.5)*35;
-}
-dg.setAttribute('position',new THREE.BufferAttribute(da,3));
-S.add(new THREE.Points(dg,new THREE.PointsMaterial({
-  color:0x42ff5a,size:.04,transparent:true,opacity:.25,
-  blending:THREE.AdditiveBlending,depthWrite:false,sizeAttenuation:true,
-})));
-
-
-
 /* ════════ MOUSE ════════ */
 const m={x:innerWidth/2,y:innerHeight/2,nx:0,ny:0};
 const m3=new THREE.Vector3(9999,9999,0); // 3D cursor position
@@ -141,10 +125,6 @@ addEventListener('touchmove',e=>{if(e.touches.length)onMove(e.touches[0].clientX
 /* ════════ LOGO TILT + GLOW (on hover/proximity to logo element) ════════ */
 let glowVal=0;
 function updateLogo(){
-  // 3D tilt
-  const rx=m.ny*8,ry=m.nx*12,tz=Math.abs(m.nx*m.ny)*15;
-  lwEl.style.transform=`perspective(1200px) rotateX(${-rx}deg) rotateY(${ry}deg) translateZ(${tz}px)`;
-
   // Check if cursor is near the logo DOM element
   const rect=lwEl.getBoundingClientRect();
   const pad=80; // extra padding around logo
@@ -271,13 +251,6 @@ const dt=1/60; // fixed timestep for smooth movement
     // Rotation
     mesh.rotation.x+=rs.x;mesh.rotation.y+=rs.y;mesh.rotation.z+=rs.z;
   });
-
-  // Dust subtle drift
-  for(let i=0;i<DC;i++){
-    da[i*3+1]+=Math.sin(t*.15+i)*.0008;
-    da[i*3]+=Math.cos(t*.1+i*.5)*.0004;
-  }
-  dg.attributes.position.needsUpdate=true;
 
   // Orbiting lights
   pl1.position.x=Math.cos(t*.2)*15;pl1.position.z=Math.sin(t*.2)*12;
