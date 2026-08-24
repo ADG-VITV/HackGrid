@@ -1,0 +1,37 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum TeamRole {
+  LEADER
+  MEMBER
+}
+
+model Team {
+  id        String       @id @default(cuid())
+  name      String
+  code      String       @unique
+  members   TeamMember[]
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+}
+
+model TeamMember {
+  id        String   @id @default(cuid())
+  teamId    String
+  name      String
+  email     String
+  role      TeamRole @default(MEMBER)
+  joinOrder Int
+  createdAt DateTime @default(now())
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, email])
+  @@index([email])
+  @@index([teamId, joinOrder])
+}
