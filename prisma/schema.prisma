@@ -35,3 +35,5 @@ model TeamMember {
   @@index([email])
   @@index([teamId, joinOrder])
 }
+
+
