@@ -189,7 +189,7 @@ async function createTeam(formData: FormData): Promise<AuctionTeamState> {
         include: teamInclude,
       });
 
-      revalidatePath("/auction");
+      revalidatePath("/teams");
 
       return {
         status: "success",
@@ -276,7 +276,7 @@ async function joinTeam(formData: FormData): Promise<AuctionTeamState> {
     include: teamInclude,
   });
 
-  revalidatePath("/auction");
+  revalidatePath("/teams");
 
   return {
     status: "success",
