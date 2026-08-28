@@ -31,9 +31,10 @@ export function TeamDetails({ state }: { state: AuctionTeamState }) {
   }
 
   const isLeader = state.viewerRole === "LEADER";
+  const isIncomplete = state.team.members.length < 2;
 
   return (
-    <aside className="rounded-lg border border-emerald-500/30 bg-black p-5 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]">
+    <aside className="rounded-lg border border-emerald-500/30 bg-[#051306] p-5 shadow-[0_0_0_1px_rgba(22,101,52,0.25)]">
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-400">
@@ -44,9 +45,16 @@ export function TeamDetails({ state }: { state: AuctionTeamState }) {
             {state.team.members.length}/{maxTeamMembers} members
           </p>
         </div>
-        <span className="rounded-full border border-emerald-500/40 px-3 py-1 text-xs font-medium text-emerald-300">
-          {isLeader ? "Leader" : "Member"}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-2">
+          {isIncomplete && (
+            <span className="rounded-full border border-amber-500/50 bg-amber-500/10 px-3 py-1 text-xs font-medium text-amber-300">
+              Incomplete
+            </span>
+          )}
+          <span className="rounded-full border border-emerald-500/40 px-3 py-1 text-xs font-medium text-emerald-300">
+            {isLeader ? "Leader" : "Member"}
+          </span>
+        </div>
       </div>
 
       <div className="mt-5 rounded-md border border-white/10 bg-zinc-950 p-3">

@@ -1,7 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import { Navbar } from "../components/navbar";
 import {
   getAuctionTeamForEmailAction,
   submitAuctionTeamAction,
@@ -9,6 +9,7 @@ import {
 } from "./actions";
 import { AuctionDashboard } from "./auction-dashboard";
 import { TeamDetails } from "./team-details";
+import { FaRegCircleUser, FaRegSquarePlus } from "react-icons/fa6";
 
 const initialAuctionTeamState: AuctionTeamState = {
   status: "idle",
@@ -331,42 +332,34 @@ export function AuctionTeamClient() {
   return (
     <main className="flex min-h-screen flex-col bg-zinc-950 px-5 py-6 pb-[24vh] text-zinc-100 sm:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
-        <header className="flex items-center justify-between rounded-lg border border-emerald-500/25 bg-black px-4 py-3">
-          <Link href="/" className="text-base font-semibold text-white">
-            HackGrid
-          </Link>
-          <nav className="flex items-center gap-4 text-sm text-zinc-400">
-            <Link href="/" className="transition hover:text-emerald-300">
-              Home
-            </Link>
-            <a href="#about" className="transition hover:text-emerald-300">
-              About
-            </a>
-            <a href="#team-details" className="transition hover:text-emerald-300">
-              TeamDetails
-            </a>
-            <div className="grid size-9 place-items-center rounded-full border border-emerald-500/50 text-sm font-semibold text-emerald-300">
-              G
-            </div>
-          </nav>
-        </header>
+        <Navbar />
 
         <section className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
           <div className="grid gap-6 md:grid-cols-2">
             <button
               type="button"
               onClick={() => setOpenForm("join")}
-              className="grid h-full place-items-center rounded-2xl border-2 border-dashed border-emerald-400/60 bg-black/40 p-6 text-center text-xl font-semibold text-white transition hover:border-emerald-400 hover:bg-emerald-400/5 hover:text-emerald-200"
+              className="group grid h-full place-items-center rounded-2xl border-2 border-dashed border-emerald-400/60 bg-[#051306] p-6 text-center transition hover:border-emerald-400 hover:bg-[#08230c]"
             >
-              Join a team
+              <span className="flex flex-col items-center gap-4">
+                <FaRegCircleUser className="size-12 text-emerald-300 transition group-hover:text-emerald-200" aria-hidden />
+                <span className="text-xl font-semibold text-white transition group-hover:text-emerald-200">
+                  Join a team
+                </span>
+              </span>
             </button>
 
             <button
               type="button"
               onClick={() => setOpenForm("create")}
-              className="grid h-full min-h-[220px] place-items-center rounded-2xl border-2 border-dashed border-emerald-400/60 bg-black/40 p-6 text-center text-xl font-semibold text-white transition hover:border-emerald-400 hover:bg-emerald-400/5 hover:text-emerald-200"
+              className="group grid h-full min-h-[220px] place-items-center rounded-2xl border-2 border-dashed border-emerald-400/60 bg-[#051306] p-6 text-center transition hover:border-emerald-400 hover:bg-[#08230c]"
             >
-              Create A team
+              <span className="flex flex-col items-center gap-4">
+                <FaRegSquarePlus className="size-12 text-emerald-300 transition group-hover:text-emerald-200" aria-hidden />
+                <span className="text-xl font-semibold text-white transition group-hover:text-emerald-200">
+                  Create A team
+                </span>
+              </span>
             </button>
           </div>
 
