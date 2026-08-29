@@ -1,9 +1,17 @@
-import Image from "next/image";
+import React from "react";
+import BulgeGrid from "@/components/BulgeGrid";
+import TechCursor from "@/components/TechCursor";
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      Hello bbg....luv u😘
-    </div>
+    <main className="relative h-screen w-screen bg-black overflow-hidden cursor-none">
+      
+      {/* 1. Custom Mechanical Cursor */}
+      <TechCursor />
+      
+      {/* 2. The Distorting White Mesh Grid */}
+      <BulgeGrid />
+
+    </main>
   );
 }
