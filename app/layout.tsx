@@ -34,7 +34,7 @@ export default function RootLayout({
         ${splineSansMono.variable}
       `}
     >
-      <body>{children}</body>
+      <body className="min-h-full flex flex-col bg-black text-white m-0 p-0">{children}</body>
     </html>
   );
 }
