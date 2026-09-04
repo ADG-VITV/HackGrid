@@ -1,0 +1,10 @@
+body {
+  margin: 0;
+  padding: 40px 20px;
+  background-color: #060c07;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+}

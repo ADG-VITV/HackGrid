@@ -1,0 +1,255 @@
+/* ========================================================================== 
+   ABOUT ADG CARD COMPONENT (Scoped)
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap');
+
+.about-adg-card {
+  --adg-green: #26be51;
+  --adg-neon: var(--color-neon, #42ff5a);
+  --adg-glow: rgba(66, 255, 90, 0.45);
+  --adg-glow-bright: rgba(66, 255, 90, 0.75);
+  --adg-bg-panel: linear-gradient(135deg, rgba(6, 12, 7, 0.94) 0%, rgba(2, 5, 3, 0.98) 100%);
+  --adg-muted: #8ba892;
+  --adg-text: #a8c0ad;
+  --adg-border: rgba(66, 255, 90, 0.28);
+  --adg-line: rgba(66, 255, 90, 0.22);
+  --adg-line-faint: rgba(66, 255, 90, 0.1);
+
+  --adg-font-head: 'Bebas Neue', sans-serif;
+  --adg-font-cyber: 'Orbitron', sans-serif;
+  --adg-font-mono: 'Share Tech Mono', monospace;
+  --adg-font-body: 'Rajdhani', sans-serif;
+
+  box-sizing: border-box;
+  position: relative;
+  width: 100%;
+  max-width: 1200px;
+  min-height: clamp(460px, 55vh, 600px);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 0 auto;
+  padding: clamp(60px, 7vw, 90px) clamp(30px, 4.5vw, 60px);
+  overflow: hidden;
+  color: #ffffff;
+  font-family: var(--adg-font-body);
+  background: var(--adg-bg-panel);
+  border: 1px solid var(--adg-border);
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.85), 0 0 35px rgba(66, 255, 90, 0.05), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+.about-adg-card *,
+.about-adg-card *::before,
+.about-adg-card *::after {
+  box-sizing: border-box;
+}
+
+.about-adg-card::before,
+.about-adg-card::after {
+  content: '';
+  position: absolute;
+  z-index: 2;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--adg-neon);
+  pointer-events: none;
+}
+
+.about-adg-card::before {
+  top: 11px;
+  left: 11px;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.about-adg-card::after {
+  right: 11px;
+  bottom: 11px;
+  border-left: 0;
+  border-top: 0;
+}
+
+.about-adg-card .adg-watermark {
+  position: absolute;
+  top: 2px;
+  right: 4%;
+  z-index: 0;
+  color: rgba(66, 255, 90, 0.05);
+  font-family: var(--adg-font-cyber);
+  font-size: clamp(88px, 16vw, 185px);
+  font-weight: 900;
+  line-height: 1;
+  letter-spacing: -8px;
+  pointer-events: none;
+  user-select: none;
+}
+
+.about-adg-card .adg-layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(280px, auto) 1fr;
+  gap: clamp(28px, 4vw, 52px);
+  align-items: center;
+}
+
+.about-adg-card .adg-title-box {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.about-adg-card .adg-pretitle {
+  display: block;
+  margin-bottom: 6px;
+  color: #ffffff;
+  font-family: var(--adg-font-mono);
+  font-size: 12px;
+  letter-spacing: 3.5px;
+  text-transform: uppercase;
+}
+
+.about-adg-card .adg-main-heading {
+  margin: 0;
+  color: #ffffff;
+  font-family: var(--adg-font-head);
+  font-size: clamp(70px, 9.5vw, 124px);
+  font-weight: 400;
+  line-height: 0.8;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.about-adg-card .word-this-is,
+.about-adg-card .word-adg {
+  display: block;
+}
+
+.about-adg-card .word-adg {
+  color: var(--adg-neon);
+  text-shadow: 0 0 14px var(--adg-glow-bright), 0 0 30px var(--adg-glow), 0 0 60px rgba(66, 255, 90, 0.3);
+}
+
+.about-adg-card .word-adg span {
+  color: #ffffff;
+}
+
+.about-adg-card .adg-motto {
+  margin: 24px 0 0;
+  color: var(--adg-neon);
+  font-family: var(--adg-font-mono);
+  font-size: 10px;
+  letter-spacing: 1.8px;
+}
+
+.about-adg-card .adg-content {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.about-adg-card .adg-lead {
+  margin: 0;
+  color: #ffffff;
+  font-size: clamp(17px, 1.7vw, 21px);
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.2px;
+}
+
+.about-adg-card .adg-description {
+  margin: 0;
+  color: var(--adg-text);
+  font-size: clamp(13px, 1.1vw, 14.5px);
+  font-weight: 400;
+  line-height: 1.55;
+  letter-spacing: 0.15px;
+}
+
+.about-adg-card .adg-pillars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  margin-top: 8px;
+  padding: 15px 0 12px;
+  border-top: 1px solid var(--adg-line);
+  border-bottom: 1px solid var(--adg-line-faint);
+}
+
+.about-adg-card .adg-pillar {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 0 12px;
+  border-right: 1px solid var(--adg-line);
+}
+
+.about-adg-card .adg-pillar:first-child {
+  padding-left: 0;
+}
+
+.about-adg-card .adg-pillar:last-child {
+  padding-right: 0;
+  border-right: 0;
+}
+
+.about-adg-card .pillar-index {
+  color: var(--adg-muted);
+  font-family: var(--adg-font-mono);
+  font-size: 9px;
+  letter-spacing: 1.2px;
+}
+
+.about-adg-card .pillar-name {
+  color: var(--adg-neon);
+  font-family: var(--adg-font-cyber);
+  font-size: clamp(13px, 1.25vw, 16px);
+  font-weight: 700;
+  letter-spacing: 0.6px;
+}
+
+.about-adg-card .adg-pillar small {
+  color: var(--adg-muted);
+  font-family: var(--adg-font-body);
+  font-size: 12px;
+  line-height: 1.15;
+}
+
+@media (max-width: 800px) {
+  .about-adg-card .adg-layout {
+    grid-template-columns: 1fr;
+    gap: 24px;
+  }
+
+  .about-adg-card .adg-main-heading {
+    font-size: clamp(60px, 15vw, 92px);
+  }
+}
+
+@media (max-width: 500px) {
+  .about-adg-card {
+    min-height: auto;
+    padding: 36px 18px;
+  }
+
+  .about-adg-card .adg-pillars {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    border-bottom: 0;
+  }
+
+  .about-adg-card .adg-pillar {
+    padding: 0 0 8px;
+    border-right: 0;
+    border-bottom: 1px solid var(--adg-line-faint);
+  }
+
+  .about-adg-card .adg-pillar:last-child {
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+}
