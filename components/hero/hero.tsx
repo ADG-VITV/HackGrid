@@ -66,7 +66,7 @@ export default function Hero() {
   }, []);
 
   return (
-    <main className="relative z-10 flex min-h-dvh w-screen flex-col items-center justify-center">
+    <section className="relative flex min-h-dvh w-screen flex-col items-center justify-center">
       <div
         ref={cursorRef}
         className="fixed h-[420px] w-[420px] -translate-x-1/2 -translate-y-1/2 rounded-full pointer-events-none bg-[radial-gradient(circle,rgba(66,255,90,0.08)_0%,rgba(66,255,90,0.025)_35%,transparent_70%)] max-[768px]:hidden"
@@ -75,7 +75,7 @@ export default function Hero() {
 
       <canvas
         ref={canvasRef}
-        className="fixed inset-0 z-[1] pointer-events-none"
+        className="fixed inset-0 z-[1] pointer-events-none bg-transparent [mix-blend-mode:screen]"
         aria-hidden="true"
       />
 
@@ -144,6 +144,6 @@ export default function Hero() {
           aria-hidden="true"
         />
       </div>
-    </main>
+    </section>
   );
 }

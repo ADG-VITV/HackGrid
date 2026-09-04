@@ -39,7 +39,8 @@ export function initHero(elements: HeroElements) {
     alpha: true,
     antialias: true,
   });
-
+  R.setClearColor(0x000000, 0);
+  
   R.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   R.setSize(window.innerWidth, window.innerHeight);
 
