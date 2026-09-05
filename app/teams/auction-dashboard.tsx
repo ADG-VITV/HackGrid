@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Navbar } from "../components/navbar";
 import type { AuctionTeamState } from "./actions";
 import { TeamDetails } from "./team-details";
 
@@ -67,8 +66,6 @@ export function AuctionDashboard({ state }: { state: AuctionTeamState }) {
   return (
     <main className="min-h-screen bg-zinc-950 px-5 py-6 text-zinc-100 sm:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-col gap-6">
-        <Navbar />
-
         <section className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
           {auctionSkipped ? (
             <AuctionPlaceholder />

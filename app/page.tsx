@@ -1,6 +1,7 @@
 import React from "react";
 import BulgeGrid from "@/components/BulgeGrid";
 import TechCursor from "@/components/TechCursor";
+import { Navbar } from "@/components/ui/Navbar";
 import Hero from "@/components/hero/hero";
 
 export default function Home() {
@@ -12,6 +13,8 @@ export default function Home() {
       
       {/* 2. The Distorting White Mesh Grid */}
       <BulgeGrid />
+
+      <Navbar />
 
       <Hero />
 
