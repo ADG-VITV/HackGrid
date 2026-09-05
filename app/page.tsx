@@ -1,4 +1,3 @@
-import React from "react";
 import BulgeGrid from "@/components/BulgeGrid";
 import TechCursor from "@/components/TechCursor";
 import { Navbar } from "@/components/ui/Navbar";
