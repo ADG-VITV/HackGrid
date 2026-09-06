@@ -7,6 +7,7 @@ const navLinks = [
   { href: "/", label: "Home" },
   { href: "/bidding", label: "Bidding" },
   { href: "/teams", label: "Teams" },
+  { href: "/login", label: "Continue with Google" },
 ];
 
 export function Navbar() {
