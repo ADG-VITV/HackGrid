@@ -1,12 +1,9 @@
-"use client";
-
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { Navbar } from "@/components/ui/Navbar";
-import BulgeGrid from "@/components/BulgeGrid";
-import TechCursor from "@/components/TechCursor";
-import Hero from "@/components/hero/hero";
-import { usePathname } from "next/navigation";
+
+import ClientLayout from "./ClientLayout";
+
+import "./globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -31,24 +28,13 @@ export default function RootLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
-
   return (
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-black text-white m-0 p-0 relative">
-        <Navbar />
-        {pathname === "/" ? (
-          <div className="flex-1 relative overflow-hidden cursor-none bg-black">
-            <TechCursor />
-            <BulgeGrid />
-            <Hero />
-          </div>
-        ) : (
-          <main className="flex-1">{children}</main>
-        )}
+        <ClientLayout>{children}</ClientLayout>
       </body>
     </html>
   );

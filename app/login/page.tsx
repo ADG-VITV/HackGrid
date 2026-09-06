@@ -1,30 +1,36 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+} from "firebase/auth";
+
+import { auth } from "@/lib/firebase";
+
 export default function LoginPage() {
   const router = useRouter();
-  const [isLoading, setIsLoading] = useState(false);
+  const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleGoogleLogin = async () => {
-    // TODO: Connect Firebase Google Authentication
-    setIsLoading(true);
-    setError(null);
+    setLoading(true);
+    setError("");
 
-    // Simulate API call delay
     try {
-      // In a real implementation, this would be:
-      // const provider = new GoogleAuthProvider(auth);
-      // await signInWithPopup(auth, provider);
-      // Then on success:
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      const provider = new GoogleAuthProvider();
+
+      await signInWithPopup(auth, provider);
+
       router.push("/teams");
-    } catch (err) {
-      setError("Authentication failed. Please try again.");
-      console.error("Google login error:", err);
+    } catch (error) {
+      console.error("Google login failed:", error);
+      setError("Unable to sign in with Google. Please try again.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -77,16 +83,48 @@ export default function LoginPage() {
             >
               {isLoading ? (
                 <>
-                  <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 014.582 9m0 0H9m11 11v-5h-.581m0 0a8.005 8.005 0 01-14.736-3m14.736 3a5.006 5.006 0 00-9.475-3.912m13.663 7.097a5.006 5.006 0 00-9.475 3.912M20.354 10.354a5.006 5.006 0 01-9.475-3.912m-3.122 6.242a5.006 5.006 0 00-9.475 3.912m9.475 3.912V16h-.581" />
+                  <svg
+                    className="h-4 w-4 animate-spin"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                      d="M12 4v1m0 14v1m8-8h-1M5 12H4m14.95-4.95-.7.7M6.75 17.25l-.7.7m11.9 0-.7-.7M6.75 6.75l-.7-.7"
+                    />
                   </svg>
+
                   <span>Signing in...</span>
                 </>
               ) : (
                 <>
-                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.27h5.61c-.39 1.31-1.41 2.25-2.7 2.25-3.25 0-5.91-2.64-5.91-5.9s2.66-5.9 5.91-5.9c1.13 0 2.16.28 3.03.78l5.21-5.21C21.3 4.7 20.18 4 19 4c-4.52 0-8.19 3.66-8.19 8.19 0 1.24.13 2.45.38 3.58H6.27c-.45-1.1-.7-2.33-.7-3.66 0-2.76 1.99-5 4.5-5l-.42 2.07c-1.95.48-3.3 1.89-3.3 3.96 0 2.76 1.99 5 4.5 5l.42-2.07c1.38-.29 2.56-.82 3.39-1.47l2.2 2.2c-.86 1.03-1.59 2.18-2.03 3.42v2.06h3.64c.24-1.09.39-2.28.39-3.5z" />
+                  <svg
+                    className="h-4 w-4"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path
+                      fill="#4285F4"
+                      d="M21.35 11.1h-9.18v3.55h5.27c-.23 1.18-.9 2.18-1.92 2.85v2.36h3.1c1.82-1.68 2.87-4.16 2.87-7.09 0-.69-.06-1.35-.14-1.67z"
+                    />
+                    <path
+                      fill="#34A853"
+                      d="M12.17 21.5c2.6 0 4.78-.86 6.37-2.32l-3.1-2.36c-.86.58-1.96.92-3.27.92-2.51 0-4.64-1.7-5.4-3.99H3.57v2.43a9.62 9.62 0 0 0 8.6 5.32z"
+                    />
+                    <path
+                      fill="#FBBC05"
+                      d="M6.77 13.75a5.77 5.77 0 0 1 0-3.5V7.82H3.57a9.6 9.6 0 0 0 0 8.36l3.2-2.43z"
+                    />
+                    <path
+                      fill="#EA4335"
+                      d="M12.17 6.26c1.42 0 2.69.49 3.69 1.45l2.77-2.77C16.95 3.42 14.77 2.5 12.17 2.5a9.62 9.62 0 0 0-8.6 5.32l3.2 2.43c.76-2.29 2.89-3.99 5.4-3.99z"
+                    />
                   </svg>
+
                   <span>Continue with Google</span>
                 </>
               )}
