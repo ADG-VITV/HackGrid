@@ -16,10 +16,10 @@ export default function ClientLayout({
   return (
     <>
       <Navbar />
+      <TechCursor />
 
       {pathname === "/" ? (
         <div className="flex-1 relative overflow-hidden cursor-none bg-black">
-          <TechCursor />
           <BulgeGrid />
           <Hero />
         </div>
