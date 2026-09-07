@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
-import { Navbar } from "../components/navbar";
 import {
   getAuctionTeamForEmailAction,
   submitAuctionTeamAction,
@@ -332,8 +331,6 @@ export function AuctionTeamClient() {
   return (
     <main className="flex min-h-screen flex-col bg-zinc-950 px-5 py-6 pb-[24vh] text-zinc-100 sm:px-8">
       <div className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6">
-        <Navbar />
-
         <section className="grid flex-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(300px,360px)]">
           <div className="grid gap-6 md:grid-cols-2">
             <button

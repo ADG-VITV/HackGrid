@@ -1,5 +1,6 @@
 
 import type { Metadata } from "next";
+import { Navbar } from "@/components/ui/Navbar";
 import { AuctionTeamClient } from "./auction-team-client";
 
 export const metadata: Metadata = {
@@ -8,5 +9,10 @@ export const metadata: Metadata = {
 };
 
 export default function AuctionPage() {
-  return <AuctionTeamClient />;
+  return (
+    <>
+      <Navbar />
+      <AuctionTeamClient />
+    </>
+  );
 }

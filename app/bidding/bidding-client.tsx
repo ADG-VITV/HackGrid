@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { Navbar } from "../components/navbar";
 import { ChevronIcon } from "./auction-icon";
 import { ExpandedWorkspace } from "./expanded-workspace";
 import {
@@ -102,8 +101,6 @@ export function BiddingClient() {
   return (
     <main className="flex min-h-dvh flex-col overflow-x-hidden bg-black p-4 text-zinc-100 sm:p-[3%]">
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5">
-        <Navbar />
-
         <section className="flex min-h-0 flex-1 flex-col gap-[2.5%] lg:flex-row">
           <div className="flex min-h-0 flex-1 flex-col gap-[2%] self-start rounded-[2.5rem] border border-neon/20 bg-black p-[1.5%] shadow-[0_0_80px_rgba(66,255,90,0.06)] lg:w-[74%]">
             <section className="flex min-h-0 flex-1 flex-col gap-[2%] rounded-3xl border border-neon/20 bg-zinc-950/60 p-[2%]">
