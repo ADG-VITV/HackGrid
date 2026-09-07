@@ -2,19 +2,18 @@ import React from "react";
 import BulgeGrid from "@/components/BulgeGrid";
 import TechCursor from "@/components/TechCursor";
 import Hero from "@/components/hero/hero";
+import Footer from "@/components/footer/footer";
 
 export default function Home() {
   return (
-    <main className="relative h-screen w-screen bg-black overflow-hidden cursor-none">
-      
-      {/* 1. Custom Mechanical Cursor */}
-      <TechCursor />
-      
-      {/* 2. The Distorting White Mesh Grid */}
-      <BulgeGrid />
+    <>
+      <main className="relative h-screen w-screen bg-black overflow-hidden cursor-none">
+        <TechCursor />
+        <BulgeGrid />
+        <Hero />
+      </main>
 
-      <Hero />
-
-    </main>
+      <Footer />
+    </>
   );
 }
