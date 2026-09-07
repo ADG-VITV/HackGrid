@@ -10,72 +10,94 @@ interface DropdownProps {
   offset?: number;
 }
 
-export function Dropdown({ trigger, children, align = "right", offset = 8 }: DropdownProps) {
+export function Dropdown({
+  trigger,
+  children,
+  align = "right",
+  offset = 8,
+}: DropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const [position, setPosition] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLDivElement>(null);
 
   const updatePosition = useCallback(() => {
-    if (triggerRef.current && dropdownRef.current) {
-      const triggerRect = triggerRef.current.getBoundingClientRect();
-      const dropdownRect = dropdownRef.current.getBoundingClientRect();
-      const viewportWidth = window.innerWidth;
-      const viewportHeight = window.innerHeight;
+    if (!triggerRef.current || !dropdownRef.current) return;
 
-      let top = triggerRect.bottom + offset;
-      let left: number;
+    const triggerRect = triggerRef.current.getBoundingClientRect();
+    const dropdownRect = dropdownRef.current.getBoundingClientRect();
 
-      if (align === "right") {
-        left = triggerRect.right - dropdownRect.width;
-        // Ensure dropdown doesn't go off screen on the right
-        if (left < 0) left = 0;
-        if (left + dropdownRect.width > viewportWidth) {
-          left = viewportWidth - dropdownRect.width;
-        }
-      } else {
-        left = triggerRect.left;
-        // Ensure dropdown doesn't go off screen on the right
-        if (left + dropdownRect.width > viewportWidth) {
-          left = viewportWidth - dropdownRect.width;
-        }
-        if (left < 0) left = 0;
+    const viewportWidth = window.innerWidth;
+    const viewportHeight = window.innerHeight;
+
+    let top = triggerRect.bottom + offset;
+    let left: number;
+
+    if (align === "right") {
+      left = triggerRect.right - dropdownRect.width;
+
+      // Keep dropdown inside viewport horizontally
+      if (left < 0) {
+        left = 0;
       }
 
-      // Ensure dropdown doesn't go off screen at the bottom
-      if (top + dropdownRect.height > viewportHeight) {
-        top = triggerRect.top - dropdownRect.height - offset;
+      if (left + dropdownRect.width > viewportWidth) {
+        left = viewportWidth - dropdownRect.width;
+      }
+    } else {
+      left = triggerRect.left;
+
+      // Keep dropdown inside viewport horizontally
+      if (left + dropdownRect.width > viewportWidth) {
+        left = viewportWidth - dropdownRect.width;
       }
 
-      setPosition({ top, left });
+      if (left < 0) {
+        left = 0;
+      }
     }
+
+    // Open upward if there isn't enough space below
+    if (top + dropdownRect.height > viewportHeight) {
+      top = triggerRect.top - dropdownRect.height - offset;
+    }
+
+    setPosition({ top, left });
   }, [align, offset]);
 
   useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
+    if (!isOpen) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Node;
+
       if (
         dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
+        !dropdownRef.current.contains(target) &&
         triggerRef.current &&
-        !triggerRef.current.contains(event.target as Node)
+        !triggerRef.current.contains(target)
       ) {
         setIsOpen(false);
       }
-    }
+    };
 
-    function handleKeyDown(event: KeyboardEvent) {
+    const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setIsOpen(false);
       }
-    }
+    };
 
-    function handleResize() {
-      if (isOpen) updatePosition();
-    }
+    const handleResize = () => {
+      updatePosition();
+    };
 
-    function handleScroll() {
-      if (isOpen) updatePosition();
-    }
+    const handleScroll = () => {
+      updatePosition();
+    };
 
     document.addEventListener("mousedown", handleClickOutside);
     document.addEventListener("keydown", handleKeyDown);
@@ -91,10 +113,11 @@ export function Dropdown({ trigger, children, align = "right", offset = 8 }: Dro
   }, [isOpen, updatePosition]);
 
   const toggleOpen = () => {
-    const newIsOpen = !isOpen;
-    setIsOpen(newIsOpen);
-    if (newIsOpen) {
-      // Use requestAnimationFrame to ensure DOM is ready for measurement
+    const nextState = !isOpen;
+
+    setIsOpen(nextState);
+
+    if (nextState) {
       requestAnimationFrame(() => {
         updatePosition();
       });
@@ -102,20 +125,23 @@ export function Dropdown({ trigger, children, align = "right", offset = 8 }: Dro
   };
 
   return (
-    <div className="relative inline-block" data-slot="dropdown">
+    <div
+      className="relative inline-block"
+      data-slot="dropdown"
+    >
       <div
         ref={triggerRef}
         onClick={toggleOpen}
         className="inline-block"
         tabIndex={0}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
+        onKeyDown={(event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
             toggleOpen();
           }
         }}
         role="button"
-        aria-haspopup="true"
+        aria-haspopup="menu"
         aria-expanded={isOpen}
       >
         {trigger}
@@ -125,7 +151,12 @@ export function Dropdown({ trigger, children, align = "right", offset = 8 }: Dro
         <div
           ref={dropdownRef}
           className={cn(
-            "fixed z-50 w-56 origin-top-right rounded-lg border border-neon/20 bg-black/90 backdrop-blur-md shadow-lg animate-in fade-in-0 zoom-in-95 duration-150 ease-out"
+            "fixed z-50 w-56 origin-top-right",
+            "rounded-lg border border-neon/20",
+            "bg-black/90 backdrop-blur-md",
+            "shadow-lg",
+            "animate-in fade-in-0 zoom-in-95",
+            "duration-150 ease-out"
           )}
           style={{
             top: position.top,

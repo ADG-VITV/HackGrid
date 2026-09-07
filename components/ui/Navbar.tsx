@@ -75,11 +75,10 @@ export function Navbar() {
             <Link
               key={link.href}
               href={link.href}
-              className={`flex h-9 items-center rounded-lg px-3 text-sm font-medium transition sm:px-4 ${
-                isActive
+              className={`flex h-9 items-center rounded-lg px-3 text-sm font-medium transition sm:px-4 ${isActive
                   ? "border border-neon/50 bg-neon/10 text-neon"
                   : "border border-transparent text-zinc-400 hover:bg-neon/5 hover:text-zinc-100"
-              }`}
+                }`}
             >
               {link.label}
             </Link>
@@ -87,47 +86,67 @@ export function Navbar() {
         })}
 
         {user ? (
-          <Dropdown align="right" offset={4}>
-            <button
-              className="flex h-8 w-8 items-center justify-center rounded-full p-0 transition-colors hover:bg-neon/5 focus:outline-none focus:ring-2 focus:ring-neon/50"
-              aria-label="User menu"
-              aria-haspopup="true"
-            >
-              <Avatar
-                src={user.photoURL}
-                alt={user.displayName || "User"}
-                name={user.displayName}
-              />
-            </button>
-            <DropdownLabel className="px-3 py-2">
-              <div className="flex items-center gap-2">
+          <Dropdown
+            align="right"
+            offset={4}
+            trigger={
+              <button
+                className="flex h-9 w-9 items-center justify-center rounded-full p-0 transition-all hover:bg-neon/10 focus:outline-none focus:ring-2 focus:ring-neon/50"
+                aria-label="User menu"
+              >
                 <Avatar
                   src={user.photoURL}
                   alt={user.displayName || "User"}
                   name={user.displayName}
                 />
+
+                <span className="ml-1 text-zinc-400">⌄</span>
+              </button>
+            }
+          >
+            <DropdownLabel className="px-3 py-2.5">
+              <div className="flex items-center gap-3">
+                <Avatar
+                  src={user.photoURL}
+                  alt={user.displayName || "User"}
+                  name={user.displayName}
+                />
+
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-white truncate">
+                  <p className="truncate text-sm font-medium text-white">
                     {user.displayName || "User"}
                   </p>
-                  <p className="text-xs text-zinc-500 truncate">
+
+                  <p className="truncate text-xs text-zinc-500">
                     {user.email}
                   </p>
                 </div>
               </div>
             </DropdownLabel>
+
             <DropdownSeparator />
-            <DropdownItem onClick={() => {/* TODO: navigate to profile */}}>
+
+            <DropdownItem
+              onClick={() => {
+                // TODO: navigate to profile
+              }}
+            >
               User Profile
             </DropdownItem>
-            <DropdownItem onClick={signOut} destructive>
+
+            <DropdownSeparator />
+
+            <DropdownItem
+              onClick={signOut}
+              destructive
+            >
               Logout
             </DropdownItem>
           </Dropdown>
         ) : (
           <Link
             href="/login"
-            className="flex h-9 items-center rounded-lg px-3 text-sm font-medium transition sm:px-4 border border-neon/50 bg-neon/10 text-neon hover:bg-neon/20"
+            className="flex h-9 items-center rounded-lg border border-neon/50 bg-neon/10 px-3 text-sm font-medium text-neon transition hover:bg-neon/20 sm:px-4"
           >
             Login
           </Link>
