@@ -13,15 +13,11 @@ export default function Home() {
         <Hero />
       </main>
 
-<<<<<<< HEAD
-      <Footer />
-    </>
-=======
       <Navbar />
 
       <Hero />
 
-    </main>
->>>>>>> c6f265330b0dec4b8565e35f3dec155da4b719f4
+      <Footer />
+      </>
   );
 }
