@@ -1,32 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useState } from "react";
 import { ChevronIcon } from "./auction-icon";
 import { ExpandedWorkspace } from "./expanded-workspace";
-import { ActAsBar } from "./act-as-bar";
-import { DevConsole } from "./dev-console";
-import { ResourceManager } from "./resource-manager";
-import { SecondView } from "./second-view";
-import { auctionTiles } from "./auction-data";
 import {
-  getBiddingContextAction,
-  listTeamsAction,
-  resetEventAction,
-  startCapsuleAction,
-  startEventAction,
-  type BiddingContext,
-  type TeamOption,
-} from "./actions";
-import {
-  secondsUntil,
-  useAuctionSocket,
-  useSecondTick,
-  type ConsoleEntry,
-} from "./use-auction-socket";
-
-const IS_DEV = process.env.NODE_ENV === "development";
-const ACT_AS_KEY = "hackgrid:actAsTeamId";
-const EMAIL_KEYS = ["hackgrid:gmail", "hackgrid:userEmail", "email"];
+  AUTO_INCREMENT_FALLBACK,
+  STARTING_BALANCE,
+  auctionTiles,
+  formatCredits,
+  type AuctionTile,
+} from "./auction-data";
+import { useTimers, getSubcapsuleInfo, SUBCAPSULE_SECONDS } from "./use-timers";
 
 function formatTimerDisplay(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -34,376 +18,269 @@ function formatTimerDisplay(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function readStoredEmail() {
-  for (const key of EMAIL_KEYS) {
-    const value = window.localStorage.getItem(key);
-    if (value && value.includes("@")) return value;
-  }
-  return "";
-}
-
-const emptyContext: BiddingContext = {
-  status: "success",
-  message: "",
-  team: null,
-  resources: null,
-  capsules: auctionTiles.map((tile, index) => ({
-    key: tile.id,
-    name: tile.label,
-    sequenceOrder: index + 1,
-    capsuleId: null,
-    status: "PENDING" as const,
-    tierCount: tile.items.length,
-    podId: null,
-    podLabel: null,
-    podKind: null,
-  })),
-};
-
 export function BiddingClient() {
-  const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [context, setContext] = useState<BiddingContext>(emptyContext);
-  const [localLog, setLocalLog] = useState<ConsoleEntry[]>([]);
-  const [expanded, setExpanded] = useState(true);
-  const [pending, startTransition] = useTransition();
+  const [openTile, setOpenTile] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState<Record<string, number>>({});
+  const [bids, setBids] = useState<Record<string, number>>({});
 
-  useSecondTick();
+  const {
+    capsuleTimers,
+    startCapsuleTimer,
+    totalForCapsule,
+    markSold,
+    isSold,
+    bidTimeLeft,
+    activeBidTile,
+    resetBidTimer,
+    clearBidTimer,
+  } = useTimers();
 
-  const pushLocal = useCallback((level: ConsoleEntry["level"], message: string) => {
-    setLocalLog((previous) =>
-      [
-        ...previous,
-        { id: Date.now() + Math.random(), at: new Date().toISOString(), level, message },
-      ].slice(-100),
-    );
-  }, []);
+  const balance = STARTING_BALANCE;
 
-  // ---------------------------------------------------------------- identity
-
-  useEffect(() => {
-    if (!IS_DEV) return;
-    listTeamsAction().then(setTeams).catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function resolveIdentity() {
-      const stored = IS_DEV ? window.localStorage.getItem(ACT_AS_KEY) : null;
-      if (stored) {
-        if (!cancelled) setTeamId(stored);
-        return;
+  function toggleTile(id: string) {
+    setOpenTile((current) => {
+      const next = current === id ? null : id;
+      if (next) {
+        const tile = auctionTiles.find((t) => t.id === next);
+        if (tile) startCapsuleTimer(tile.id, tile.items.length);
       }
-      const email = readStoredEmail();
-      if (!email) return;
-      const result = await getBiddingContextAction(email).catch(() => null);
-      if (!cancelled && result?.team) setTeamId(String(result.team.id));
-    }
-
-    void resolveIdentity();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const refreshContext = useCallback((id: string | null) => {
-    getBiddingContextAction(id ?? "")
-      .then(setContext)
-      .catch(() => undefined);
-  }, []);
-
-  useEffect(() => {
-    refreshContext(teamId);
-  }, [teamId, refreshContext]);
-
-  function selectTeam(next: string) {
-    setTeamId(next || null);
-    if (IS_DEV) {
-      if (next) window.localStorage.setItem(ACT_AS_KEY, next);
-      else window.localStorage.removeItem(ACT_AS_KEY);
-    }
-  }
-
-  // ------------------------------------------------------------------ socket
-
-  // Exactly one capsule runs at a time, so there is exactly one room to be in.
-  const liveCapsule = context.capsules.find((capsule) => capsule.status === "LIVE") ?? null;
-  const activePodId = liveCapsule?.podId ?? null;
-
-  const { connection, state: room, entries, feedback, clockSkew, placeBid, clearEntries, lastEvent } =
-    useAuctionSocket(activePodId, teamId);
-
-  // A round ending, or the next one opening, changes which room this client
-  // belongs to — so re-read the context whenever the server says so.
-  useEffect(() => {
-    if (!lastEvent) return;
-    if (
-      lastEvent.type === "CAPSULE_OPENED" ||
-      lastEvent.type === "CAPSULE_CLOSED" ||
-      lastEvent.type === "EVENT_COMPLETE"
-    ) {
-      refreshContext(teamId);
-    }
-  }, [lastEvent, teamId, refreshContext]);
-
-  // Settlements land in the Resource Manager, so refresh it when a lot closes.
-  useEffect(() => {
-    if (lastEvent?.type === "LOT_CLOSED") refreshContext(teamId);
-  }, [lastEvent, teamId, refreshContext]);
-
-  // Between rounds there is no room to be in, so no push can arrive — a team
-  // sitting on the page would never see the next round open. Poll gently, and
-  // only while disconnected; once the room is live the socket does the work.
-  useEffect(() => {
-    if (connection === "open") return;
-    const id = setInterval(() => refreshContext(teamId), 10_000);
-    return () => clearInterval(id);
-  }, [connection, teamId, refreshContext]);
-
-  const consoleEntries = useMemo(
-    () => [...localLog, ...entries].sort((a, b) => a.at.localeCompare(b.at)),
-    [localLog, entries],
-  );
-
-  // ------------------------------------------------------------- dev actions
-
-  function runDevAction(label: string, fn: () => Promise<{ status: string; message: string }>) {
-    startTransition(async () => {
-      const report = await fn();
-      pushLocal(report.status === "error" ? "error" : "success", `${label}: ${report.message}`);
-      refreshContext(teamId);
+      return next;
     });
   }
 
-  // --------------------------------------------------------------------- ui
+  function selectItem(tile: AuctionTile, index: number) {
+    setActiveIndex((prev) => ({ ...prev, [tile.id]: index }));
+    setBids((prev) => ({ ...prev, [tile.id]: tile.items[index].price }));
+  }
 
-  const eventStarted = context.capsules.some((capsule) => capsule.status !== "PENDING");
-  const eventComplete =
-    eventStarted && context.capsules.every((capsule) => capsule.status === "CLOSED");
+  function changeBid(tile: AuctionTile, delta: -1 | 1) {
+    const index = activeIndex[tile.id] ?? 0;
+    const item = tile.items[index];
+    const increment = item.minIncrement ?? AUTO_INCREMENT_FALLBACK;
 
-  const activeLot = room?.lots.find((lot) => lot.status === "OPEN") ?? null;
-  const secondsLeft = secondsUntil(activeLot?.closesAt ?? null, clockSkew);
+    setBids((prev) => {
+      const current = prev[tile.id] ?? item.price;
+      const next = Math.max(item.price, Math.min(STARTING_BALANCE, current + delta * increment));
+      return { ...prev, [tile.id]: next };
+    });
+  }
 
-  function workspaceMessage(): string | null {
-    if (!teamId) return "Pick a team above to join its pod room.";
-    if (!liveCapsule) {
-      return eventComplete
-        ? "Every round is finished. Your final product spec is in the Resource Manager."
-        : IS_DEV
-          ? "No round is live. Hit Start event to draw pods for the Track Auction; each later round opens itself when the one before it finishes."
-          : "The auction has not started yet. This page will come alive when the first round opens.";
+  function placeBid(tile: AuctionTile) {
+    const state = capsuleTimers[tile.id];
+    if (!state || state.expired) return;
+    resetBidTimer(tile.id);
+  }
+
+  function getTimerState(tile: AuctionTile) {
+    const state = capsuleTimers[tile.id];
+    if (!state) {
+      const total = totalForCapsule(tile.items.length);
+      return {
+        capsuleExpired: false,
+        subcapsuleTimeLeft: SUBCAPSULE_SECONDS,
+        locked: false,
+      };
     }
-    if (!liveCapsule.podId) {
-      return `${liveCapsule.name} is running, but your team was not seated in a pod for it.`;
+    const { subRemaining } = getSubcapsuleInfo(state.totalSeconds, state.remainingSeconds);
+    return {
+      capsuleExpired: state.expired,
+      subcapsuleTimeLeft: Math.max(0, Math.ceil(subRemaining)),
+      locked: state.expired,
+    };
+  }
+
+  function handleAutoSoldCheck(tile: AuctionTile) {
+    const state = capsuleTimers[tile.id];
+    if (state && state.expired) {
+      for (let i = 0; i < tile.items.length; i++) {
+        markSold(`${tile.id}-${i}`);
+      }
     }
-    return null;
   }
 
   return (
-    <main className="flex min-h-dvh flex-col overflow-x-hidden bg-black p-4 pt-20 text-zinc-100 sm:p-[3%] sm:pt-24">
-      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4">
-        <ActAsBar
-          isDev={IS_DEV}
-          teams={teams}
-          activeTeamId={teamId}
-          onSelectTeam={selectTeam}
-          teamLabel={context.team ? `${context.team.name} · ${context.team.code}` : null}
-          podLabel={room?.pod.label ?? liveCapsule?.podLabel ?? null}
-          connection={connection}
-          balance={context.resources?.remaining ?? null}
-        />
-
-        {IS_DEV ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.04] px-4 py-2.5">
-            <span className="font-mono text-[0.6rem] tracking-[0.14em] text-amber-500/80 uppercase">
-              Organiser
-            </span>
-            <button
-              type="button"
-              onClick={() => runDevAction("Start event", startEventAction)}
-              disabled={pending || Boolean(liveCapsule)}
-              className="rounded-lg border border-neon/50 bg-neon/10 px-4 py-1.5 text-xs font-semibold tracking-wide text-neon uppercase transition hover:bg-neon/20 disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              Start event
-            </button>
-            <button
-              type="button"
-              onClick={() => runDevAction("Reset", resetEventAction)}
-              disabled={pending}
-              className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold tracking-wide text-red-400 uppercase transition hover:bg-red-500/10 disabled:opacity-30"
-            >
-              Reset event
-            </button>
-            <span className="text-[0.62rem] text-zinc-600">
-              One press runs all five rounds in order; each opens the next when it settles.
-            </span>
-          </div>
-        ) : null}
-
+    <main className="flex min-h-dvh flex-col overflow-x-hidden bg-black p-4 text-zinc-100 sm:p-[3%]">
+      <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-5">
         <section className="flex min-h-0 flex-1 flex-col gap-[2.5%] lg:flex-row">
           <div className="flex min-h-0 flex-1 flex-col gap-[2%] self-start rounded-[2.5rem] border border-neon/20 bg-black p-[1.5%] shadow-[0_0_80px_rgba(66,255,90,0.06)] lg:w-[74%]">
             <section className="flex min-h-0 flex-1 flex-col gap-[2%] rounded-3xl border border-neon/20 bg-zinc-950/60 p-[2%]">
-              {context.capsules.map((capsule) => {
-                const isLive = capsule.status === "LIVE";
-                const isClosed = capsule.status === "CLOSED";
-                const isOpen = isLive && expanded;
-                const tile = auctionTiles.find((t) => t.id === capsule.key);
-                const biddable =
-                  tile?.items.filter((item) => item.minIncrement !== null).length ?? 0;
+              {auctionTiles.map((tile) => {
+                const isOpen = openTile === tile.id;
+                const index = activeIndex[tile.id] ?? 0;
+                const bid = bids[tile.id] ?? tile.items[index].price;
+                const timer = getTimerState(tile);
+                const timerState = capsuleTimers[tile.id];
+                const total = totalForCapsule(tile.items.length);
+                const bidActive = activeBidTile === tile.id && bidTimeLeft !== null && bidTimeLeft > 0;
+
+                if (timer.capsuleExpired) handleAutoSoldCheck(tile);
+
+                const isLowTime = timer.subcapsuleTimeLeft <= 60 && timer.subcapsuleTimeLeft > 0;
 
                 return (
-                  <div key={capsule.key} className="flex shrink-0 flex-col">
-                    <div
-                      className={`flex h-[68px] w-full shrink-0 items-center gap-3 rounded-[20px] border pr-3 pl-5 transition ${
-                        isLive
-                          ? "border-neon/70 bg-neon/[0.08] shadow-[0_0_24px_rgba(66,255,90,0.15)]"
-                          : isClosed
-                            ? "border-white/10 bg-black/60"
-                            : "border-white/5 bg-black/40"
+                  <div key={tile.id} className="flex shrink-0 flex-col">
+                    <button
+                      type="button"
+                      onClick={() => toggleTile(tile.id)}
+                      aria-expanded={isOpen}
+                      aria-controls={`${tile.id}-workspace`}
+                      className={`flex h-[68px] w-full shrink-0 items-center justify-between rounded-[20px] border px-6 font-medium transition ${
+                        timer.capsuleExpired
+                          ? "border-red-500/40 bg-red-500/[0.06] text-red-400"
+                          : isOpen
+                            ? "border-neon/70 bg-neon/[0.08] text-neon shadow-[0_0_24px_rgba(66,255,90,0.15)]"
+                            : "border-neon/20 bg-black text-zinc-200 hover:border-neon/50 hover:bg-neon/[0.04]"
                       }`}
                     >
-                      <span
-                        className={`grid size-6 shrink-0 place-items-center rounded-md font-mono text-[0.6rem] ${
-                          isLive
-                            ? "bg-neon/20 text-neon"
-                            : isClosed
-                              ? "bg-zinc-800 text-zinc-500"
-                              : "bg-zinc-900 text-zinc-700"
-                        }`}
-                      >
-                        {capsule.sequenceOrder}
-                      </span>
-
-                      <button
-                        type="button"
-                        onClick={() => isLive && setExpanded((value) => !value)}
-                        disabled={!isLive}
-                        aria-expanded={isOpen}
-                        className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left font-medium disabled:cursor-default"
-                      >
-                        <span
-                          className={`text-sm tracking-wide uppercase ${
-                            isLive ? "text-neon" : isClosed ? "text-zinc-400" : "text-zinc-600"
-                          }`}
-                        >
-                          {capsule.name}
-                        </span>
-
-                        {isLive && activeLot ? (
-                          <span
-                            className={`flex items-center gap-1.5 rounded-md px-2 py-0.5 font-mono text-[0.65rem] ${
-                              activeLot.awaitingQuorum
-                                ? "bg-sky-500/10 text-sky-300"
-                                : secondsLeft !== null && secondsLeft <= 10
-                                  ? "animate-pulse bg-red-500/15 text-red-400"
-                                  : "bg-neon/[0.08] text-neon"
-                            }`}
-                          >
-                            {activeLot.awaitingQuorum
-                              ? `waiting ${room?.pod.onlineCount ?? 0}/${room?.pod.quorum ?? 0}`
-                              : formatTimerDisplay(secondsLeft ?? 0)}
+                      <span className="flex items-center gap-3">
+                        <span className="text-sm tracking-wide uppercase">{tile.label}</span>
+                        {timer.capsuleExpired ? (
+                          <span className="rounded-md bg-red-500/20 px-2 py-0.5 text-[0.65rem] font-semibold text-red-400">
+                            EXPIRED
                           </span>
-                        ) : null}
-
-                        <span className="font-mono text-[0.58rem] tracking-[0.14em] text-zinc-600 uppercase">
-                          {isClosed
-                            ? "settled"
-                            : isLive
-                              ? `live · pods of ${capsule.tierCount}`
-                              : `locked · ${biddable} bid rounds`}
-                        </span>
-                      </button>
-
-                      {IS_DEV && !isLive ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            runDevAction(`Force ${capsule.name}`, () =>
-                              startCapsuleAction(capsule.key),
-                            )
-                          }
-                          disabled={pending}
-                          className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-[0.6rem] font-semibold tracking-wide text-amber-400/90 uppercase transition hover:bg-amber-500/10 disabled:opacity-30"
-                        >
-                          Force
-                        </button>
-                      ) : null}
-
-                      {isLive ? (
-                        <button
-                          type="button"
-                          onClick={() => setExpanded((value) => !value)}
-                          aria-label={isOpen ? "Collapse" : "Expand"}
-                          className="shrink-0 px-2 text-neon"
-                        >
-                          <ChevronIcon open={isOpen} />
-                        </button>
-                      ) : (
-                        <span className="w-9 shrink-0" />
-                      )}
-                    </div>
+                        ) : timerState ? (
+                          <span className="flex items-center gap-1.5 rounded-md bg-neon/[0.08] px-2 py-0.5 font-mono text-[0.65rem] text-neon">
+                            <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <circle cx="12" cy="12" r="10" />
+                              <polyline points="12 6 12 12 16 14" />
+                            </svg>
+                            {formatTimerDisplay(timer.subcapsuleTimeLeft)}
+                          </span>
+                        ) : (
+                          <span className="rounded-md bg-neon/[0.06] px-2 py-0.5 font-mono text-[0.65rem] text-zinc-500">
+                            {formatTimerDisplay(total)}
+                          </span>
+                        )}
+                      </span>
+                      <span className={timer.capsuleExpired ? "text-red-400" : isOpen ? "text-neon" : "text-zinc-500"}>
+                        <ChevronIcon open={isOpen} />
+                      </span>
+                    </button>
 
                     <div
+                      id={`${tile.id}-workspace`}
                       className={`grid transition-all duration-300 ease-in-out ${
                         isOpen ? "mt-[1%] grid-rows-[1fr]" : "grid-rows-[0fr]"
                       }`}
                     >
                       <div className="min-h-0 overflow-hidden">
-                        <div className="mx-auto w-[96%]">
-                          {isOpen ? (
-                            <ExpandedWorkspace
-                              capsuleName={capsule.name}
-                              room={room}
-                              connection={connection}
-                              clockSkew={clockSkew}
-                              feedback={feedback}
-                              notStartedMessage={workspaceMessage()}
-                              onBid={placeBid}
-                            />
-                          ) : null}
+                        <div className="w-[96%] mx-auto">
+                          <ExpandedWorkspace
+                            tile={tile}
+                            activeIndex={index}
+                            bid={bid}
+                            onSelectItem={(next) => selectItem(tile, next)}
+                            onChangeBid={(delta) => changeBid(tile, delta)}
+                            onBid={() => placeBid(tile)}
+                            subcapsuleTimeLeft={timer.subcapsuleTimeLeft}
+                            capsuleExpired={timer.capsuleExpired}
+                            bidTimeLeft={activeBidTile === tile.id ? bidTimeLeft : null}
+                            bidActive={bidActive}
+                            isSold={isSold(`${tile.id}-${index}`)}
+                            locked={timer.locked}
+                          />
                         </div>
                       </div>
                     </div>
                   </div>
                 );
               })}
-
-              {!liveCapsule ? (
-                <p className="px-2 py-4 text-center text-xs leading-5 text-zinc-600">
-                  {workspaceMessage()}
-                </p>
-              ) : null}
             </section>
           </div>
 
-          <aside className="flex w-full flex-col gap-4 self-start lg:w-[23%]">
-            <ResourceManager
-              resources={context.resources}
-              capsules={context.capsules}
-              identityHint={
-                teamId ? null : "Pick a team above to see what it owns."
-              }
-            />
+          <aside className="flex w-full flex-col self-start lg:w-[23%]">
+            <div className="flex h-20 shrink-0 items-center rounded-2xl border border-neon/20 bg-zinc-950/60 px-6 lg:px-[9%]">
+              <span className="text-sm font-medium text-zinc-300">
+                Balance:{" "}
+                <span className="font-mono text-base font-semibold text-neon">
+                  {formatCredits(balance)} credits
+                </span>
+              </span>
+            </div>
 
-            {IS_DEV ? <SecondView teams={teams} /> : null}
+            <div className="my-[3%] hidden lg:block" />
 
-            {IS_DEV ? (
-              <DevConsole
-                entries={consoleEntries}
-                onClear={() => {
-                  clearEntries();
-                  setLocalLog([]);
-                }}
-              />
-            ) : null}
+            <div className="flex min-h-[320px] flex-1 flex-col rounded-3xl border border-neon/25 bg-zinc-950/60 p-5">
+              <h4 className="mb-4 text-sm font-semibold tracking-wide text-zinc-400 uppercase">
+                Bid Status
+              </h4>
+
+              {activeBidTile && bidTimeLeft !== null ? (
+                <div className="flex flex-col items-center gap-3">
+                  <div
+                    className={`flex h-20 w-20 items-center justify-center rounded-full border-2 font-mono text-2xl font-bold ${
+                      bidTimeLeft <= 3
+                        ? "border-red-500/60 bg-red-500/10 text-red-400 animate-pulse"
+                        : bidTimeLeft <= 5
+                          ? "border-amber-500/60 bg-amber-500/10 text-amber-400"
+                          : "border-neon/60 bg-neon/10 text-neon"
+                    }`}
+                  >
+                    {bidTimeLeft}
+                  </div>
+                  <p className="text-center text-xs text-zinc-400">
+                    {bidTimeLeft <= 3
+                      ? "Almost sold!"
+                      : "Next bid must be within this time"}
+                  </p>
+                  <p className="text-xs text-zinc-500">
+                    Capsule:{" "}
+                    <span className="text-zinc-300">
+                      {auctionTiles.find((t) => t.id === activeBidTile)?.label}
+                    </span>
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                  <svg className="h-8 w-8 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                    <circle cx="12" cy="12" r="10" />
+                    <polyline points="12 6 12 12 16 14" />
+                  </svg>
+                  <p className="text-xs text-zinc-500">
+                    Place a bid to start the 10s countdown
+                  </p>
+                </div>
+              )}
+
+              <div className="mt-auto border-t border-neon/10 pt-4">
+                <h5 className="mb-2 text-[0.65rem] font-semibold tracking-wider text-zinc-500 uppercase">
+                  Capsule Timers
+                </h5>
+                <div className="space-y-2">
+                  {auctionTiles.map((tile) => {
+                    const state = capsuleTimers[tile.id];
+                    const total = totalForCapsule(tile.items.length);
+                    const running = state && !state.expired;
+                    const { subRemaining } = state
+                      ? getSubcapsuleInfo(state.totalSeconds, state.remainingSeconds)
+                      : { subRemaining: total };
+                    return (
+                      <div
+                        key={tile.id}
+                        className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs ${
+                          state?.expired
+                            ? "bg-red-500/[0.06] text-red-400"
+                            : running
+                              ? "bg-neon/[0.04] text-zinc-300"
+                              : "text-zinc-500"
+                        }`}
+                      >
+                        <span className="truncate">{tile.label}</span>
+                        <span className="shrink-0 pl-2 font-mono text-[0.65rem]">
+                          {state?.expired
+                            ? "DONE"
+                            : state
+                              ? formatTimerDisplay(Math.ceil(subRemaining))
+                              : formatTimerDisplay(total)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
           </aside>
         </section>
-
-        <p className="pb-2 text-center text-[0.62rem] text-zinc-700">
-          Rounds run one at a time in order · pods are drawn when a round opens · all bids validated
-          and recorded server-side
-        </p>
       </div>
     </main>
   );

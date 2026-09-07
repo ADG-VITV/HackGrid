@@ -3,9 +3,6 @@ import { PrismaClient } from "@prisma/client";
 
 const globalForPrisma = globalThis as unknown as {
   prisma?: PrismaClient;
-  /// Set by server.mjs's auction hub, which boots before Next does. Reusing it
-  /// keeps the app and the websocket server on one connection pool.
-  __hackgridPrisma?: PrismaClient;
 };
 
 function createPrismaClient() {
@@ -19,8 +16,7 @@ function createPrismaClient() {
   return new PrismaClient({ adapter });
 }
 
-export const prisma =
-  globalForPrisma.prisma ?? globalForPrisma.__hackgridPrisma ?? createPrismaClient();
+export const prisma = globalForPrisma.prisma ?? createPrismaClient();
 
 if (process.env.NODE_ENV !== "production") {
   globalForPrisma.prisma = prisma;
