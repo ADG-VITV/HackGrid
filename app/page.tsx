@@ -1,22 +1,16 @@
 import BulgeGrid from "@/components/BulgeGrid";
-import TechCursor from "@/components/TechCursor";
-import { Navbar } from "@/components/ui/Navbar";
 import Hero from "@/components/hero/hero";
+import Footer from "@/components/footer/footer";
 
 export default function Home() {
   return (
-    <main className="relative h-screen w-screen bg-black overflow-hidden cursor-none">
-      
-      {/* 1. Custom Mechanical Cursor */}
-      <TechCursor />
-      
-      {/* 2. The Distorting White Mesh Grid */}
-      <BulgeGrid />
+    <>
+      <section className="relative h-screen w-full overflow-hidden bg-black cursor-none">
+        <BulgeGrid />
+        <Hero />
+      </section>
 
-      <Navbar />
-
-      <Hero />
-
-    </main>
+      <Footer />
+    </>
   );
 }

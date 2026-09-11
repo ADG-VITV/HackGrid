@@ -100,11 +100,11 @@ const devBypassState: AuctionTeamState = {
   message: "",
   viewerRole: "LEADER",
   team: {
-    id: "dev-bypass",
+    id: -1,
     name: "Dev Team",
     code: "HG-DEV000",
     members: [
-      { id: "1", name: "Dev User", email: "dev@hackgrid.local", role: "LEADER", joinOrder: 1 },
+      { id: -1, name: "Dev User", email: "dev@hackgrid.local", role: "LEADER", joinOrder: 1 },
     ],
   },
 };
