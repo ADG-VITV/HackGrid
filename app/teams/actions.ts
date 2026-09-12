@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 
 export type TeamMemberView = {
-  id: string;
+  id: number;
   name: string;
   email: string;
   role: "LEADER" | "MEMBER";
@@ -14,7 +14,7 @@ export type TeamMemberView = {
 };
 
 export type TeamView = {
-  id: string;
+  id: number;
   name: string;
   code: string;
   members: TeamMemberView[];
@@ -29,9 +29,12 @@ export type AuctionTeamState = {
 
 const teamInclude = {
   members: {
-    orderBy: [{ joinOrder: "asc" }, { createdAt: "asc" }],
+    orderBy: { joinOrder: "asc" },
+    include: { user: true },
   },
 } satisfies Prisma.TeamInclude;
+
+type TeamWithMembers = Prisma.TeamGetPayload<{ include: typeof teamInclude }>;
 
 const maxTeamMembers = 6;
 
@@ -63,16 +66,17 @@ function makeTeamCode() {
   return `HG-${suffix}`;
 }
 
-function toTeamView(team: Prisma.TeamGetPayload<{ include: typeof teamInclude }>) {
+/** Leadership lives on teams.leaderId, so a member's role is derived. */
+function toTeamView(team: TeamWithMembers): TeamView {
   return {
     id: team.id,
     name: team.name,
     code: team.code,
     members: team.members.map((member) => ({
-      id: member.id,
-      name: member.name,
-      email: member.email,
-      role: member.role,
+      id: member.userId,
+      name: member.user.name,
+      email: member.user.email,
+      role: member.userId === team.leaderId ? "LEADER" : "MEMBER",
       joinOrder: member.joinOrder,
     })),
   };
@@ -102,6 +106,14 @@ function databaseError(error: unknown): AuctionTeamState {
   return validationError("Database request failed. Try again.");
 }
 
+async function findTeamForEmail(email: string) {
+  return prisma.team.findFirst({
+    where: { members: { some: { user: { email } } } },
+    orderBy: { createdAt: "desc" },
+    include: teamInclude,
+  });
+}
+
 export async function getAuctionTeamForEmailAction(emailValue: string): Promise<AuctionTeamState> {
   try {
     if (!process.env.DATABASE_URL) {
@@ -111,34 +123,74 @@ export async function getAuctionTeamForEmailAction(emailValue: string): Promise<
     const email = normalizeEmail(emailValue);
 
     if (!isEmail(email)) {
-      return {
-        status: "idle",
-        message: "",
-      };
+      return { status: "idle", message: "" };
     }
 
-    const member = await prisma.teamMember.findFirst({
-      where: { email },
-      orderBy: { createdAt: "desc" },
-      include: {
-        team: {
-          include: teamInclude,
-        },
-      },
-    });
+    const team = await findTeamForEmail(email);
 
-    if (!member) {
-      return {
-        status: "idle",
-        message: "",
-      };
+    if (!team) {
+      return { status: "idle", message: "" };
     }
+
+    const view = toTeamView(team);
+    const viewer = view.members.find((member) => member.email === email);
 
     return {
       status: "success",
       message: "Team loaded.",
-      viewerRole: member.role,
-      team: toTeamView(member.team),
+      viewerRole: viewer?.role ?? "MEMBER",
+      team: view,
+    };
+  } catch (error) {
+    return databaseError(error);
+  }
+}
+
+/** Look up any team by a member's name and email. Used by the teams page. */
+export async function lookupTeamMemberAction(
+  _previousState: AuctionTeamState,
+  formData: FormData,
+): Promise<AuctionTeamState> {
+  try {
+    if (!process.env.DATABASE_URL) {
+      return databaseMissingState();
+    }
+
+    const name = field(formData, "lookupName");
+    const email = normalizeEmail(field(formData, "lookupEmail"));
+
+    if (!name) {
+      return validationError("Enter the person's name.");
+    }
+
+    if (!isEmail(email)) {
+      return validationError("Enter a valid email address.");
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (!user) {
+      return validationError("No person found with that email.");
+    }
+
+    if (user.name.trim().toLowerCase() !== name.toLowerCase()) {
+      return validationError("That name does not match the email on record.");
+    }
+
+    const team = await findTeamForEmail(email);
+
+    if (!team) {
+      return validationError("That person is not in a team yet.");
+    }
+
+    const view = toTeamView(team);
+    const viewer = view.members.find((member) => member.email === email);
+
+    return {
+      status: "success",
+      message: `Showing ${view.name} as ${viewer?.role === "LEADER" ? "the team lead" : "a member"}.`,
+      viewerRole: viewer?.role ?? "MEMBER",
+      team: view,
     };
   } catch (error) {
     return databaseError(error);
@@ -171,22 +223,32 @@ async function createTeam(formData: FormData): Promise<AuctionTeamState> {
     return validationError("Confirm that creating a team makes you the team leader.");
   }
 
+  const existing = await findTeamForEmail(email);
+
+  if (existing) {
+    return validationError("That email is already in a team.");
+  }
+
   for (let attempt = 0; attempt < 5; attempt += 1) {
     try {
-      const team = await prisma.team.create({
-        data: {
-          name: teamName,
-          code: makeTeamCode(),
-          members: {
-            create: {
-              name: leaderName,
-              email,
-              role: "LEADER",
-              joinOrder: 1,
-            },
+      const team = await prisma.$transaction(async (tx) => {
+        const leader = await tx.user.upsert({
+          where: { email },
+          update: { name: leaderName },
+          create: { email, name: leaderName },
+        });
+
+        const created = await tx.team.create({
+          data: {
+            name: teamName,
+            code: makeTeamCode(),
+            leaderId: leader.id,
+            members: { create: { userId: leader.id, joinOrder: 1 } },
           },
-        },
-        include: teamInclude,
+          include: teamInclude,
+        });
+
+        return created;
       });
 
       revalidatePath("/teams");
@@ -243,14 +305,15 @@ async function joinTeam(formData: FormData): Promise<AuctionTeamState> {
     return validationError("No team found for that code.");
   }
 
-  const existingMember = existingTeam.members.find((member) => member.email === email);
+  const alreadyIn = existingTeam.members.find((member) => member.user.email === email);
 
-  if (existingMember) {
+  if (alreadyIn) {
+    const view = toTeamView(existingTeam);
     return {
       status: "success",
       message: "You are already in this team.",
-      viewerRole: existingMember.role,
-      team: toTeamView(existingTeam),
+      viewerRole: alreadyIn.userId === existingTeam.leaderId ? "LEADER" : "MEMBER",
+      team: view,
     };
   }
 
@@ -258,22 +321,27 @@ async function joinTeam(formData: FormData): Promise<AuctionTeamState> {
     return validationError("This team is full. A team can have at most 6 people.");
   }
 
+  const elsewhere = await findTeamForEmail(email);
+
+  if (elsewhere) {
+    return validationError("That email is already in another team.");
+  }
+
   const nextJoinOrder =
     existingTeam.members.reduce((highest, member) => Math.max(highest, member.joinOrder), 0) + 1;
 
-  const team = await prisma.team.update({
-    where: { id: existingTeam.id },
-    data: {
-      members: {
-        create: {
-          name: memberName,
-          email,
-          role: "MEMBER",
-          joinOrder: nextJoinOrder,
-        },
-      },
-    },
-    include: teamInclude,
+  const team = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.upsert({
+      where: { email },
+      update: { name: memberName },
+      create: { email, name: memberName },
+    });
+
+    await tx.teamMember.create({
+      data: { teamId: existingTeam.id, userId: user.id, joinOrder: nextJoinOrder },
+    });
+
+    return tx.team.findUniqueOrThrow({ where: { id: existingTeam.id }, include: teamInclude });
   });
 
   revalidatePath("/teams");
