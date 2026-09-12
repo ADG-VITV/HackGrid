@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 
 const COUNTDOWN_TARGET = new Date("2026-09-16T08:00:00");
 
@@ -24,71 +25,137 @@ function getTimeLeft(): TimeLeft {
 
 const FLIP_DURATION_MS = 880;
 
-function DigitCard({ digit }: { digit: string }) {
+/* Metallic brushed-panel look, matched to the reference photo:
+   - a soft specular highlight sitting at the top corner where the two
+     digit panels meet (brightest right at the seam, fading outward and
+     downward)
+   - fine brushed-metal streaks
+   - a very subtle vertical darkening from top to bottom
+   `innerSide` is the side of the panel that faces the other digit in the
+   pair (that's where the seam highlight lives). The outer side (away from
+   the other digit) stays flat and darker, matching the photo. */
+function metallicTop(innerSide: "left" | "right"): CSSProperties {
+  return {
+    backgroundImage:
+      // sharp specular seam highlight
+      `radial-gradient(ellipse 70% 160% at ${innerSide} top, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.12) 30%, rgba(255,255,255,0) 60%), ` +
+      // wide soft sheen sweeping across the panel (gives the "brushed aluminum under light" look)
+      `linear-gradient(${innerSide === "left" ? "115deg" : "245deg"}, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.02) 35%, rgba(255,255,255,0.08) 55%, rgba(255,255,255,0) 80%), ` +
+      // fine brushed-metal streaks
+      "repeating-linear-gradient(93deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0.05) 1px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 4px), " +
+      // subtle green metallic tint + base steel gradient
+      "linear-gradient(180deg, #454b46 0%, #383e3a 55%, #2f332f 100%)",
+    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -6px 10px -6px rgba(0,0,0,0.6)",
+  };
+}
+
+function metallicBottom(innerSide: "left" | "right"): CSSProperties {
+  return {
+    backgroundImage:
+      `radial-gradient(ellipse 70% 150% at ${innerSide} top, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.06) 32%, rgba(255,255,255,0) 55%), ` +
+      `linear-gradient(${innerSide === "left" ? "115deg" : "245deg"}, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.01) 40%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0) 85%), ` +
+      "repeating-linear-gradient(93deg, rgba(255,255,255,0.045) 0px, rgba(255,255,255,0.045) 1px, rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px, transparent 2px, transparent 4px), " +
+      "linear-gradient(180deg, #383e39 0%, #2e332e 45%, #242825 100%)",
+    boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.5), inset 0 6px 10px -6px rgba(255,255,255,0.06)",
+  };
+}
+
+function DigitCard({
+  digit,
+  hinge,
+}: {
+  digit: string;
+  hinge: "left" | "right";
+}) {
   const [displayValue, setDisplayValue] = useState(digit);
   const isFlipping = displayValue !== digit;
+  const innerSide = hinge === "left" ? "right" : "left";
+  const topStyle = metallicTop(innerSide);
+  const bottomStyle = metallicBottom(innerSide);
 
   const numberClassName =
-    "absolute inset-x-0 top-0 flex h-[76px] items-center justify-center font-sans text-4xl font-bold tracking-tight text-[var(--neon)] [text-shadow:0_0_12px_rgba(66,255,90,0.65),0_0_28px_rgba(66,255,90,0.35)] sm:h-[104px] sm:text-6xl";
-  const bottomNumberStyle = { transform: "translateY(-50%)" };
+    "absolute inset-x-0 top-0 flex h-[76px] items-center justify-center font-sans text-4xl font-bold tracking-tight text-[#42ff5a] sm:h-[104px] sm:text-6xl";
+  const numberStyle: CSSProperties = {
+    textShadow:
+      "0 0 6px rgba(66,255,90,0.85), 0 0 16px rgba(66,255,90,0.55), 0 0 32px rgba(66,255,90,0.25)",
+  };
+  const bottomNumberStyle: CSSProperties = {
+    ...numberStyle,
+    transform: "translateY(-50%)",
+  };
 
   return (
-    <div
-      className="relative h-[76px] w-[30px] overflow-hidden rounded-2xl bg-[#4a4947] shadow-[0_10px_30px_rgba(0,0,0,0.55),0_0_16px_rgba(66,255,90,0.18)] sm:h-[104px] sm:w-[42px] sm:rounded-3xl"
-      style={{ perspective: "260px" }}
-    >
-      {/* Top half */}
-      <div className="absolute inset-x-0 top-0 h-1/2 overflow-hidden bg-gradient-to-b from-[#4a4947] to-[#43463f]">
-        <span className={numberClassName}>{displayValue}</span>
-      </div>
-
-      {/* Bottom half */}
-      <div className="absolute inset-x-0 bottom-0 h-1/2 overflow-hidden bg-gradient-to-b from-[#40403e] to-[#333432]">
-        <span className={numberClassName} style={bottomNumberStyle}>
-          {displayValue}
-        </span>
-      </div>
-
-      {isFlipping && (
-        <div
-          className="absolute inset-x-0 top-0 z-10 h-1/2 overflow-hidden bg-gradient-to-b from-[#4a4947] to-[#43463f]"
-          onAnimationEnd={() => setDisplayValue(digit)}
-          style={{
-            animation: `flip-unit-down ${FLIP_DURATION_MS}ms ease-in-out both`,
-            transformOrigin: "bottom",
-            transformStyle: "preserve-3d",
-            backfaceVisibility: "hidden",
-            willChange: "transform",
-          }}
-        >
-          <span className={numberClassName}>{displayValue}</span>
+    <div className="relative">
+      <div
+        className="relative h-[76px] w-[42px] overflow-hidden rounded-2xl bg-[#3a4039] shadow-[0_10px_30px_rgba(0,0,0,0.55),0_0_16px_rgba(66,255,90,0.18)] sm:h-[104px] sm:w-[57px] sm:rounded-3xl"
+        style={{ perspective: "260px" }}
+      >
+        {/* Top half */}
+        <div className="absolute inset-x-0 top-0 h-1/2 overflow-hidden" style={topStyle}>
+          <span className={numberClassName} style={numberStyle}>{displayValue}</span>
         </div>
+
+        {/* Bottom half */}
+        <div className="absolute inset-x-0 bottom-0 h-1/2 overflow-hidden" style={bottomStyle}>
+          <span className={numberClassName} style={bottomNumberStyle}>
+            {displayValue}
+          </span>
+        </div>
+
+        {isFlipping && (
+          <div
+            className="absolute inset-x-0 top-0 z-10 h-1/2 overflow-hidden"
+            onAnimationEnd={() => setDisplayValue(digit)}
+            style={{
+              ...topStyle,
+              animation: `flip-unit-down ${FLIP_DURATION_MS}ms ease-in-out both`,
+              transformOrigin: "bottom",
+              transformStyle: "preserve-3d",
+              backfaceVisibility: "hidden",
+              willChange: "transform",
+            }}
+          >
+            <span className={numberClassName} style={numberStyle}>{displayValue}</span>
+          </div>
+        )}
+
+        {/* Center crease */}
+        <span
+          className="pointer-events-none absolute left-0 top-1/2 z-20 h-[2px] w-full -translate-y-1/2 bg-black/60 shadow-[0_1px_0_rgba(255,255,255,0.08)]"
+          aria-hidden="true"
+        />
+      </div>
+
+      {/* Hinge pin — only on the outward-facing edge of the pair */}
+      {hinge === "left" && (
+        <span
+          className="pointer-events-none absolute left-[-4px] top-1/2 z-30 h-[12px] w-[8px] -translate-y-1/2 rounded-[2px] bg-[#2a2a28] shadow-[inset_0_0_2px_rgba(0,0,0,0.6)] sm:left-[-5px] sm:h-[18px] sm:w-[11px]"
+          aria-hidden="true"
+        />
       )}
-
-      {/* Center crease */}
-      <span
-        className="pointer-events-none absolute left-0 top-1/2 z-20 h-[2px] w-full -translate-y-1/2 bg-black/60 shadow-[0_1px_0_rgba(66,255,90,0.1)]"
-        aria-hidden="true"
-      />
-
-      {/* Hinge pins */}
-      <span
-        className="pointer-events-none absolute left-[-2px] top-1/2 z-30 h-[8px] w-[5px] -translate-y-1/2 rounded-[2px] bg-[#2a2a28] shadow-[inset_0_0_2px_rgba(0,0,0,0.6)] sm:left-[-3px] sm:h-[12px] sm:w-[7px]"
-        aria-hidden="true"
-      />
-      <span
-        className="pointer-events-none absolute right-[-2px] top-1/2 z-30 h-[8px] w-[5px] -translate-y-1/2 rounded-[2px] bg-[#2a2a28] shadow-[inset_0_0_2px_rgba(0,0,0,0.6)] sm:right-[-3px] sm:h-[12px] sm:w-[7px]"
-        aria-hidden="true"
-      />
+      {hinge === "right" && (
+        <span
+          className="pointer-events-none absolute right-[-4px] top-1/2 z-30 h-[12px] w-[8px] -translate-y-1/2 rounded-[2px] bg-[#2a2a28] shadow-[inset_0_0_2px_rgba(0,0,0,0.6)] sm:right-[-5px] sm:h-[18px] sm:w-[11px]"
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 }
 
 function FlipSeparator() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 pb-6 sm:gap-3">
-      <span className="h-[6px] w-[6px] rounded-[1px] bg-[var(--neon)] [box-shadow:0_0_6px_rgba(66,255,90,0.8)] sm:h-[8px] sm:w-[8px]" />
-      <span className="h-[6px] w-[6px] rounded-[1px] bg-[var(--neon)] [box-shadow:0_0_6px_rgba(66,255,90,0.8)] sm:h-[8px] sm:w-[8px]" />
+    <div className="flex items-center justify-center pb-6 sm:pb-7">
+      <span
+        className="select-none font-sans text-3xl font-bold leading-none text-[#42ff5a] sm:text-5xl"
+        style={{
+          textShadow:
+            "0 0 6px rgba(66,255,90,0.85), 0 0 16px rgba(66,255,90,0.55), 0 0 32px rgba(66,255,90,0.25)",
+        }}
+        aria-hidden="true"
+      >
+        :
+      </span>
     </div>
   );
 }
@@ -99,16 +166,19 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <div className="flex items-center gap-[3px] sm:gap-1">
-        <DigitCard digit={tens} />
-        <DigitCard digit={ones} />
+      <div className="flex items-center gap-[2px]">
+        <DigitCard digit={tens} hinge="left" />
+        <DigitCard digit={ones} hinge="right" />
       </div>
-      <span className="text-[10px] font-semibold uppercase tracking-widest text-[var(--neon)]/60 sm:text-xs">
+      <span className="text-[10px] font-semibold uppercase tracking-widest text-[#42ff5a]/70 sm:text-xs">
         {label}
       </span>
     </div>
   );
 }
+
+// Tweak this to nudge the whole clock left (negative) or right (positive).
+const CLOCK_OFFSET_X = 0;
 
 function CountdownClock() {
   const [time, setTime] = useState<TimeLeft>(getTimeLeft());
@@ -122,14 +192,16 @@ function CountdownClock() {
   }, []);
 
   return (
-    <div className="relative z-10 mt-10 flex items-center justify-center gap-3 sm:gap-5">
-      <FlipUnit value={time.days} label="Days" />
-      <FlipSeparator />
-      <FlipUnit value={time.hours} label="Hours" />
-      <FlipSeparator />
-      <FlipUnit value={time.minutes} label="Minutes" />
-      <FlipSeparator />
-      <FlipUnit value={time.seconds} label="Seconds" />
+    <div style={{ transform: `translateX(${CLOCK_OFFSET_X}px)` }}>
+      <div className="relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3">
+        <FlipUnit value={time.days} label="Days" />
+        <FlipSeparator />
+        <FlipUnit value={time.hours} label="Hours" />
+        <FlipSeparator />
+        <FlipUnit value={time.minutes} label="Minutes" />
+        <FlipSeparator />
+        <FlipUnit value={time.seconds} label="Seconds" />
+      </div>
     </div>
   );
 }
