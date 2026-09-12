@@ -81,10 +81,16 @@ export function BiddingClient() {
 
   // ---------------------------------------------------------------- identity
 
-  useEffect(() => {
+  // Pod seats change every round, so the dev roster is re-read whenever pods
+  // are (re)drawn, not just on first load.
+  const refreshTeams = useCallback(() => {
     if (!IS_DEV) return;
     listTeamsAction().then(setTeams).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    refreshTeams();
+  }, [refreshTeams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,8 +150,9 @@ export function BiddingClient() {
       lastEvent.type === "EVENT_COMPLETE"
     ) {
       refreshContext(teamId);
+      refreshTeams();
     }
-  }, [lastEvent, teamId, refreshContext]);
+  }, [lastEvent, teamId, refreshContext, refreshTeams]);
 
   // Settlements land in the Resource Manager, so refresh it when a lot closes.
   useEffect(() => {
@@ -173,6 +180,7 @@ export function BiddingClient() {
       const report = await fn();
       pushLocal(report.status === "error" ? "error" : "success", `${label}: ${report.message}`);
       refreshContext(teamId);
+      refreshTeams();
     });
   }
 

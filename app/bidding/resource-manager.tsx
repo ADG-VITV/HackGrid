@@ -6,6 +6,7 @@ import type { CapsuleContext, TeamResources } from "./actions";
 const sourceLabel: Record<string, string> = {
   COMPETITIVE: "won at auction",
   AUTO_ASSIGNED: "last team standing",
+  NO_BIDS_ASSIGNED: "assigned, nobody bid",
   POD_AVERAGE: "remainder pod, average price",
   STARTING_BID_FALLBACK: "remainder pod, listed price",
 };
