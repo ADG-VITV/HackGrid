@@ -134,344 +134,6 @@ export function initHero(elements: HeroElements) {
   pl3.position.set(0, 12, -10);
   S.add(pl3);
 
-  const mob = window.innerWidth < 768;
-
-  /* ========================================
-     MATERIALS
-  ======================================== */
-
-  const greens = [
-    0x42ff5a,
-    0x30ee50,
-    0x22cc44,
-    0x66ff88,
-    0x88ffbb,
-    0x20ddaa,
-    0xaaffcc,
-  ];
-
-  function pickC() {
-    if (Math.random() < 0.3) {
-      return 0xffffff;
-    }
-
-    return greens[
-      Math.floor(Math.random() * greens.length)
-    ];
-  }
-
-  function mWire(
-    c: number,
-    o = 0.18,
-  ) {
-    return new THREE.MeshBasicMaterial({
-      color: c,
-      wireframe: true,
-      transparent: true,
-      opacity: o,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-  }
-
-  function mEdge(
-    c: number,
-    o = 0.45,
-  ) {
-    return new THREE.LineBasicMaterial({
-      color: c,
-      transparent: true,
-      opacity: o,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-    });
-  }
-
-  const uWobble = {
-    value: 0,
-  };
-
-  function mGlass(
-    c: number,
-    ei = 0.2,
-  ) {
-    const m =
-      new THREE.MeshPhysicalMaterial({
-        color: c,
-        emissive: c,
-        emissiveIntensity: ei,
-        metalness: 0,
-        roughness: 1,
-        transmission: 0,
-        thickness: 0,
-        ior: 1,
-        transparent: true,
-        opacity: 0.4,
-        clearcoat: 0,
-        clearcoatRoughness: 1,
-        side: THREE.DoubleSide,
-      });
-
-    m.onBeforeCompile = (shader) => {
-      shader.uniforms.uTime = uWobble;
-
-      shader.vertexShader =
-        "uniform float uTime;\n" +
-        shader.vertexShader.replace(
-          "#include <begin_vertex>",
-          `
-          #include <begin_vertex>
-
-          float wob =
-            sin(
-              uTime * 1.3 +
-              position.x * 2.4 +
-              position.y * 1.8 +
-              position.z * 2.1
-            ) * 0.055;
-
-          transformed += normal * wob;
-          `,
-        );
-    };
-
-    return m;
-  }
-
-  /* ========================================
-     CRYSTAL GEOMETRIES
-  ======================================== */
-
-  const gCrystal =
-    (() => {
-      const g =
-        new THREE.IcosahedronGeometry(
-          0.5,
-          0,
-        );
-
-      g.scale(
-        0.55,
-        1.7,
-        0.55,
-      );
-
-      return g;
-    })();
-
-  const gCrystalL =
-    (() => {
-      const g =
-        new THREE.IcosahedronGeometry(
-          0.65,
-          0,
-        );
-
-      g.scale(
-        0.5,
-        2.1,
-        0.5,
-      );
-
-      return g;
-    })();
-
-  function ndC1(c: number) {
-    const g = new THREE.Group();
-
-    g.add(
-      new THREE.Mesh(
-        gCrystal,
-        mGlass(c, 0.25),
-      ),
-    );
-
-    g.add(
-      new THREE.LineSegments(
-        new THREE.EdgesGeometry(gCrystal),
-        mEdge(c, 0.5),
-      ),
-    );
-
-    return g;
-  }
-
-  function ndC2(c: number) {
-    const g = new THREE.Group();
-
-    g.add(
-      new THREE.Mesh(
-        gCrystalL,
-        mGlass(c, 0.2),
-      ),
-    );
-
-    g.add(
-      new THREE.LineSegments(
-        new THREE.EdgesGeometry(gCrystalL),
-        mEdge(c, 0.4),
-      ),
-    );
-
-    g.add(
-      new THREE.Mesh(
-        gCrystalL.clone(),
-        mWire(c, 0.05),
-      ),
-    );
-
-    return g;
-  }
-
-  const makers = [
-    ndC1,
-    ndC2,
-  ];
-
-  const wt = [60, 40];
-  const tw = wt.reduce(
-    (a, b) => a + b,
-    0,
-  );
-
-  function pickT() {
-    const r = Math.random() * tw;
-
-    let s = 0;
-
-    for (let i = 0; i < wt.length; i++) {
-      s += wt[i];
-
-      if (r < s) {
-        return i;
-      }
-    }
-
-    return 0;
-  }
-
-  /* ========================================
-     SPAWN OBJECTS
-  ======================================== */
-
-  const objs: {
-    mesh: THREE.Group;
-    home: THREE.Vector3;
-    rs: THREE.Vector3;
-    dAngle: number;
-    dTurn: number;
-    dSpeed: number;
-    dRadius: number;
-    vel: THREE.Vector3;
-  }[] = [];
-
-  const COUNT = 55;
-
-  const aspect =
-    window.innerWidth /
-    window.innerHeight;
-
-  for (let i = 0; i < COUNT; i++) {
-    const c = pickC();
-
-    const mesh =
-      makers[pickT()](c);
-
-    const angle =
-      Math.random() *
-      Math.PI *
-      2;
-
-    let r: number;
-
-    if (Math.random() < 0.85) {
-      r = 8 + Math.random() * 16;
-
-      if (mob) {
-        r *= 0.8;
-      }
-    } else {
-      r = 3 + Math.random() * 5;
-
-      mesh.position.z =
-        -8 - Math.random() * 6;
-    }
-
-    const x =
-      Math.cos(angle) * r;
-
-    const ySquash =
-      aspect > 1
-        ? 0.5
-        : (1 / aspect) * 0.4;
-
-    const y =
-      Math.sin(angle) *
-      r *
-      ySquash;
-
-    const z =
-      mesh.position.z ||
-      (-4 + Math.random() * 8);
-
-    mesh.position.set(
-      x,
-      y,
-      z,
-    );
-
-    mesh.rotation.set(
-      Math.random() * 6.28,
-      Math.random() * 6.28,
-      Math.random() * 6.28,
-    );
-
-    const sc =
-      0.8 +
-      Math.random() * 0.5;
-
-    mesh.scale.setScalar(sc);
-
-    S.add(mesh);
-
-    const driftAngle =
-      Math.random() * 6.28;
-
-    const driftSpeed =
-      0.3 +
-      Math.random() * 0.6;
-
-    objs.push({
-      mesh,
-      home: mesh.position.clone(),
-
-      rs: new THREE.Vector3(
-        (Math.random() - 0.5) * 0.006,
-        (Math.random() - 0.5) * 0.01,
-        (Math.random() - 0.5) * 0.005,
-      ),
-
-      dAngle: driftAngle,
-
-      dTurn:
-        0.1 +
-        Math.random() * 0.3,
-
-      dSpeed: driftSpeed,
-
-      dRadius:
-        1.5 +
-        Math.random() * 3,
-
-      vel:
-        new THREE.Vector3(
-          0,
-          0,
-          0,
-        ),
-    });
-  }
-
   /* ========================================
      MOUSE
   ======================================== */
@@ -667,8 +329,8 @@ export function initHero(elements: HeroElements) {
     gb = true;
 
     const dur =
-      160 +
-      Math.random() * 220;
+      220 +
+      Math.random() * 260;
 
     const t0 =
       performance.now();
@@ -678,18 +340,18 @@ export function initHero(elements: HeroElements) {
         y: Math.random() * 90,
 
         h:
-          3 +
-          Math.random() * 15,
+          6 +
+          Math.random() * 26,
 
         x:
           (Math.random() < 0.5
             ? -1
             : 1) *
-          (5 +
-            Math.random() * 28),
+          (10 +
+            Math.random() * 46),
 
         d:
-          Math.random() * 40,
+          Math.random() * 60,
       }));
 
     function tk(now: number) {
@@ -729,16 +391,16 @@ export function initHero(elements: HeroElements) {
             );
 
           const st =
-            Math.random() < 0.2
+            Math.random() < 0.35
               ? (Math.random() -
                   0.5) *
-                15
+                30
               : 0;
 
           layer.style.opacity =
             (
-              0.35 +
-              0.6 * lc2
+              0.5 +
+              0.8 * lc2
             ).toFixed(3);
 
           layer.style.clipPath =
@@ -757,7 +419,7 @@ export function initHero(elements: HeroElements) {
               s.x * lc2 + st
             }px, ${
               (Math.random() - 0.5) *
-              3
+              6
             }px, 0)`;
         },
       );
@@ -835,7 +497,7 @@ export function initHero(elements: HeroElements) {
     if (logoGlitchInterval === null) {
       logoGlitchInterval = setInterval(() => {
         glitch();
-      }, 1800);
+      }, 1100);
     }
   }
 
@@ -876,147 +538,6 @@ export function initHero(elements: HeroElements) {
 
     const t =
       clk.getElapsedTime();
-
-    uWobble.value = t;
-
-    objs.forEach((o) => {
-      const {
-        mesh,
-        home,
-        rs,
-        vel,
-      } = o;
-
-      o.dAngle +=
-        o.dTurn * dt;
-
-      const driftX =
-        Math.cos(o.dAngle) *
-        o.dSpeed *
-        dt;
-
-      const driftY =
-        Math.sin(o.dAngle) *
-        o.dSpeed *
-        dt *
-        0.6;
-
-      vel.x +=
-        driftX * 0.15;
-
-      vel.y +=
-        driftY * 0.15;
-
-      const hx =
-        home.x -
-        mesh.position.x;
-
-      const hy =
-        home.y -
-        mesh.position.y;
-
-      const hz =
-        home.z -
-        mesh.position.z;
-
-      const homeDist =
-        Math.sqrt(
-          hx * hx +
-            hy * hy +
-            hz * hz,
-        );
-
-      if (
-        homeDist >
-        o.dRadius
-      ) {
-        const pull =
-          (homeDist -
-            o.dRadius) *
-          0.008;
-
-        vel.x +=
-          (hx / homeDist) *
-          pull;
-
-        vel.y +=
-          (hy / homeDist) *
-          pull;
-
-        vel.z +=
-          (hz / homeDist) *
-          pull;
-      }
-
-      const dx =
-        mesh.position.x -
-        m3.x;
-
-      const dy =
-        mesh.position.y -
-        m3.y;
-
-      const dist =
-        Math.sqrt(
-          dx * dx +
-            dy * dy,
-        );
-
-      if (
-        dist < 8 &&
-        dist > 0.01
-      ) {
-        const f =
-          1 - dist / 8;
-
-        const force =
-          f * f * 2.5;
-
-        vel.x +=
-          (dx / dist) *
-          force *
-          0.1;
-
-        vel.y +=
-          (dy / dist) *
-          force *
-          0.1;
-
-        vel.z +=
-          (Math.random() - 0.5) *
-          force *
-          0.02;
-
-        mesh.rotation.x +=
-          rs.x * f * 20;
-
-        mesh.rotation.y +=
-          rs.y * f * 20;
-      }
-
-      vel.multiplyScalar(
-        0.96,
-      );
-
-      mesh.position.x +=
-        vel.x;
-
-      mesh.position.y +=
-        vel.y;
-
-      mesh.position.z +=
-        vel.z;
-
-      mesh.rotation.x +=
-        rs.x;
-
-      mesh.rotation.y +=
-        rs.y;
-
-      mesh.rotation.z +=
-        rs.z;
-    });
-
     pl1.position.x =
       Math.cos(t * 0.2) *
       15;
@@ -1133,70 +654,6 @@ export function initHero(elements: HeroElements) {
     /* Stop WebGL rendering */
 
     R.setAnimationLoop(null);
-
-    /* Dispose crystal resources */
-
-    const materials =
-      new Set<THREE.Material>();
-
-    S.traverse((object) => {
-      if (
-        object instanceof
-        THREE.Mesh
-      ) {
-        object.geometry.dispose();
-
-        if (
-          Array.isArray(
-            object.material,
-          )
-        ) {
-          object.material.forEach(
-            (material) =>
-              materials.add(
-                material,
-              ),
-          );
-        } else {
-          materials.add(
-            object.material,
-          );
-        }
-      }
-
-      if (
-        object instanceof
-        THREE.LineSegments
-      ) {
-        object.geometry.dispose();
-
-        materials.add(
-          object.material,
-        );
-      }
-
-      if (
-        object instanceof
-        THREE.Points
-      ) {
-        object.geometry.dispose();
-
-        materials.add(
-          object.material,
-        );
-      }
-    });
-
-    materials.forEach(
-      (material) => {
-        material.dispose();
-      },
-    );
-
-    /* Dispose shared geometries */
-
-    gCrystal.dispose();
-    gCrystalL.dispose();
 
     /* Dispose post-processing */
 
