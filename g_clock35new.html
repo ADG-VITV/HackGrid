@@ -1,0 +1,703 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HackGrid — Data Core Timeline</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #030704; 
+    --grid: rgba(66, 255, 90, 0.04);
+    --wire-dim: rgba(127, 168, 146, 0.3);
+    --fiber-color: #42ff5a;
+    --fiber-glow: rgba(66, 255, 90, 0.5);
+    --text-main: #ffffff;
+    --text-dim: #8b9a92;
+    --accent: #42ff5a;
+    --accent-bright: #adffb8;
+    --accent-glow: rgba(66, 255, 90, 0.85);
+  }
+
+  * { box-sizing: border-box; }
+  
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    height: 2400vh; 
+    color: var(--text-main);
+    font-family: 'JetBrains Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  .ui-layer {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100vw; height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 4vw;
+    background-image: 
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 50px 50px;
+    z-index: 10;
+  }
+
+  .hero-clock-container {
+    flex: 0 0 400px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 20px;
+  }
+
+  .clock-title {
+    font-family: 'Space Grotesk', sans-serif;
+    color: var(--text-main);
+    font-size: 3.2rem;
+    letter-spacing: 10px;
+    text-transform: uppercase;
+    text-shadow: 0 0 20px var(--fiber-glow);
+    margin: 0;
+    font-weight: 700;
+  }
+
+  .clock-face { width: 360px; height: 360px; display: block; }
+  .clock-digital-svg { fill: var(--text-main); font-size: 1.4rem; font-weight: 500; letter-spacing: 2px; font-family: 'JetBrains Mono', monospace; }
+  .clock-sub-text { fill: var(--text-dim); font-size: 0.6rem; letter-spacing: 6px; font-family: 'JetBrains Mono', monospace; }
+
+  .clock-hour, .clock-min { transform-origin: 180px 180px; transition: none; }
+  .spin-slow { transform-origin: 180px 180px; animation: spinClockwise 30s linear infinite; }
+  .spin-fast { transform-origin: 180px 180px; animation: spinClockwise 8s linear infinite; }
+
+  @keyframes spinClockwise { 100% { transform: rotate(360deg); } }
+  @keyframes spinCounter { 100% { transform: rotate(-360deg); } }
+
+  .telemetry-hud {
+    position: fixed;
+    right: 2vw;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    z-index: 100;
+  }
+
+  .telemetry-track { width: 1px; height: 160px; background: rgba(255,255,255,0.1); position: relative; }
+  .telemetry-fill { position: absolute; top: 0; left: 0; width: 100%; height: 0%; background: var(--accent); box-shadow: 0 0 8px var(--accent); }
+  .telemetry-text { font-size: 0.6rem; color: var(--text-dim); letter-spacing: 3px; writing-mode: vertical-rl; transform: rotate(180deg); }
+
+  .timeline-wrap { flex: 1; max-width: 800px; height: 800px; position: relative; }
+  .fiber-svg { display: block; width: 100%; height: 100%; overflow: visible; position: absolute; top: 0; left: 0; z-index: 1; }
+
+  .wire-active { fill: none; stroke: var(--fiber-color); stroke-linecap: round; stroke-linejoin: round; }
+  
+  .node-instance { opacity: 0; transition: opacity 0.8s ease, filter 0.4s ease; will-change: opacity; } 
+  
+  .nodule-outer { fill: none; stroke: var(--wire-dim); stroke-width: 1.5; stroke-dasharray: 4 6; transition: stroke 0.4s ease, filter 0.4s ease; }
+  .nodule-hexagon { fill: none; stroke: var(--wire-dim); stroke-width: 1.5; transition: stroke 0.4s ease, fill 0.4s ease, filter 0.4s ease; }
+  .nodule-core { fill: none; stroke: var(--wire-dim); stroke-width: 1.5; transition: stroke 0.4s ease, fill 0.4s ease, filter 0.4s ease; }
+  .nodule-crosshair { fill: none; stroke: var(--wire-dim); stroke-width: 1.5; transition: stroke 0.4s ease, filter 0.4s ease; }
+
+  .node-instance.approaching .nodule-outer { stroke: rgba(66, 255, 90, 0.6); animation: spinClockwise 8s linear infinite; }
+  .node-instance.approaching .nodule-hexagon { stroke: var(--fiber-color); filter: drop-shadow(0 0 5px var(--fiber-color)); }
+  .node-instance.approaching .nodule-crosshair { stroke: rgba(66, 255, 90, 0.8); filter: drop-shadow(0 0 2px var(--fiber-color)); }
+  .node-instance.approaching .nodule-core { stroke: var(--fiber-color); fill: var(--fiber-color); filter: drop-shadow(0 0 8px var(--fiber-color)); }
+
+  .node-instance.illuminated .nodule-outer { stroke: var(--fiber-color); filter: drop-shadow(0 0 8px var(--fiber-color)); animation: spinClockwise 3s linear infinite; }
+  .node-instance.illuminated .nodule-hexagon { stroke: var(--fiber-color); fill: rgba(66, 255, 90, 0.1); filter: drop-shadow(0 0 10px var(--fiber-color)); animation: spinCounter 10s linear infinite; }
+  .node-instance.illuminated .nodule-core { stroke: var(--fiber-color); fill: #ffffff; filter: drop-shadow(0 0 15px var(--fiber-color)); }
+  .node-instance.illuminated .nodule-crosshair { stroke: var(--fiber-color); opacity: 0.9; filter: drop-shadow(0 0 8px var(--fiber-color)); }
+
+  #burstLayer { pointer-events: none; }
+
+  .event-block {
+    position: absolute; width: 280px; opacity: 0; visibility: hidden;
+    transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 1, 0.3, 1), visibility 0s 0.5s;
+    pointer-events: none; background: rgba(2, 6, 3, 0.7);
+    border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 20px; z-index: 5; backdrop-filter: blur(12px);
+    will-change: transform, opacity;
+  }
+  .event-block.revealed {
+    opacity: 1; visibility: visible; border-color: rgba(66, 255, 90, 0.4);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.6); transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 1, 0.3, 1), visibility 0s 0s;
+  }
+  .panel-header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 12px; }
+  .time-stamp { color: var(--fiber-color); font-size: 0.8rem; font-weight: 700; letter-spacing: 1px; }
+  .sys-id { font-size: 0.55rem; color: var(--text-dim); letter-spacing: 2px; }
+  .event-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.2rem; margin: 0 0 8px 0; color: #ffffff; min-height: 28px; }
+  .event-desc { font-size: 0.8rem; color: var(--text-dim); line-height: 1.6; margin: 0; min-height: 38px;}
+
+  .push-down { transform: translate(-50%, -20px); margin-top: 30px; text-align: center; }
+  .push-down.revealed { transform: translate(-50%, 0); }
+  .push-left { transform: translate(20px, -50%); margin-left: -310px; text-align: right; }
+  .push-left.revealed { transform: translate(0, -50%); }
+  .push-right { transform: translate(-20px, -50%); margin-left: 30px; text-align: left; }
+  .push-right.revealed { transform: translate(0, -50%); }
+  .push-up { transform: translate(-50%, 20px); margin-top: -160px; text-align: center; }
+  .push-up.revealed { transform: translate(-50%, 0); }
+  .push-center { transform: translate(-50%, 100px); margin-top: 30px; text-align: center; }
+  .push-center.revealed { transform: translate(-50%, 0); }
+
+  /* Rocket Cursor / DataPacket Styles */
+  #dataPacket {
+    pointer-events: none;
+    will-change: transform;
+    transform-origin: 0px 0px;
+    opacity: 0; /* Hidden immediately on initial load until JS places it */
+  }
+  .arrow-thrust-core {
+    fill: url(#arrowThrustGrad);
+    opacity: 0.85;
+    transform-origin: 0 0;
+    animation: thrustPulse 0.18s infinite alternate ease-in-out;
+  }
+  .arrow-spark { fill: #ffffff; opacity: 0.8; }
+  .arrow-outer-body {
+    fill: #030a05;
+    stroke: var(--accent);
+    stroke-width: 1.8;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+  }
+  .arrow-inner-chevron {
+    fill: none;
+    stroke: #ffffff;
+    stroke-width: 1.4;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    opacity: 0.9;
+  }
+  .arrow-tip-node {
+    fill: var(--accent);
+    transition: fill 0.15s ease;
+  }
+  .arrow-side-fin {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.2;
+    opacity: 0.65;
+  }
+
+  /* The Approaching Ring */
+  .rocket-approach-ring {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 2.5;
+    filter: drop-shadow(0 0 6px var(--accent));
+    opacity: 0;
+    transform: scale(1.5);
+    transform-origin: 0 0;
+    transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  
+  #dataPacket.approaching .rocket-approach-ring {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  /* The Arrival Reticle that appears when locking onto the node */
+  .arrow-arrival-reticle {
+    fill: none;
+    stroke: var(--accent);
+    stroke-width: 1.5;
+    opacity: 0;
+    transform: scale(0.4);
+    transform-origin: 0 0;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+  }
+
+  /* Snapped state (when locked into the node) */
+  #dataPacket.snapped .arrow-outer-body {
+    fill: rgba(66, 255, 90, 0.2);
+    stroke: #ffffff;
+  }
+  #dataPacket.snapped .arrow-tip-node { fill: #ffffff; }
+  #dataPacket.snapped .arrow-arrival-reticle {
+    opacity: 0.75;
+    transform: scale(1.6);
+  }
+
+  @keyframes thrustPulse {
+    0% { transform: scale(0.9, 0.85); opacity: 0.7; }
+    100% { transform: scale(1.15, 1.15); opacity: 1; }
+  }
+</style>
+</head>
+<body>
+
+<div class="scroll-space"></div>
+<div class="ui-layer">
+
+  <div class="hero-clock-container">
+    <h1 class="clock-title">HackGrid</h1>
+    <svg class="clock-face" viewBox="0 0 360 360">
+      <circle cx="180" cy="180" r="160" fill="none" stroke="rgba(255,255,255,0.05)" stroke-width="1.5" stroke-dasharray="2 6"/>
+      <circle class="spin-slow" cx="180" cy="180" r="140" fill="none" stroke="var(--wire-dim)" stroke-width="1" stroke-dasharray="20 40 4 10"/>
+      
+      <g id="clock-ticks">
+        <text x="180" y="45" text-anchor="middle" fill="var(--text-dim)" font-size="16" font-family="JetBrains Mono" font-weight="500">12</text>
+        <text x="325" y="185" text-anchor="middle" fill="var(--text-dim)" font-size="16" font-family="JetBrains Mono" font-weight="500">03</text>
+        <text x="180" y="335" text-anchor="middle" fill="var(--text-dim)" font-size="16" font-family="JetBrains Mono" font-weight="500">06</text>
+        <text x="35" y="185" text-anchor="middle" fill="var(--text-dim)" font-size="16" font-family="JetBrains Mono" font-weight="500">09</text>
+      </g>
+      <text x="180" y="130" text-anchor="middle" class="clock-sub-text">LCL_TIME</text>
+      <text x="180" y="255" text-anchor="middle" class="clock-digital-svg" id="clockDigitalSvg">08:00 AM</text>
+      <g id="clockHour" class="clock-hour">
+        <polygon points="176,205 184,205 180,75" fill="var(--bg)" stroke="var(--fiber-color)" stroke-width="2" />
+        <line x1="180" y1="205" x2="180" y2="140" stroke="var(--fiber-color)" stroke-width="2"/>
+      </g>
+      <g id="clockMin" class="clock-min">
+        <line x1="180" y1="215" x2="180" y2="55" stroke="var(--text-main)" stroke-width="2" stroke-linecap="square" />
+        <circle cx="180" cy="50" r="5" fill="var(--bg)" stroke="var(--text-main)" stroke-width="1.5"/>
+      </g>
+      <circle cx="180" cy="180" r="14" fill="var(--bg)" stroke="var(--fiber-color)" stroke-width="2"/>
+      <circle class="spin-fast" cx="180" cy="180" r="18" fill="none" stroke="var(--wire-dim)" stroke-width="1.5" stroke-dasharray="2 6"/>
+      <circle cx="180" cy="180" r="4" fill="var(--accent)" filter="drop-shadow(0 0 8px var(--fiber-color))"/>
+    </svg>
+  </div>
+
+  <div class="telemetry-hud">
+    <div class="telemetry-track">
+      <div class="telemetry-fill" id="telemetryFill"></div>
+    </div>
+    <div class="telemetry-text" id="telemetryText">SYS_LOAD: 0%</div>
+  </div>
+
+  <div class="timeline-wrap">
+    <div class="event-block push-down" style="left: 100px; top: 150px;" id="card-0">
+      <div class="panel-header"><span class="time-stamp">08:00 AM</span><span class="sys-id">SEQ_01</span></div>
+      <h3 class="event-title" data-value="System Initialization">System Initialization</h3>
+      <p class="event-desc" data-value="Registration and team settlement. Opening sequence and Board Members' speech.">Registration and team settlement. Opening sequence and Board Members' speech.</p>
+    </div>
+    <div class="event-block push-down" style="left: 400px; top: 120px;" id="card-1">
+      <div class="panel-header"><span class="time-stamp">11:00 AM</span><span class="sys-id">SEQ_02</span></div>
+      <h3 class="event-title" data-value="Sustenance Break">Sustenance Break</h3>
+      <p class="event-desc" data-value="Lunch break. Disconnect from terminals and refuel core systems.">Lunch break. Disconnect from terminals and refuel core systems.</p>
+    </div>
+    <div class="event-block push-left" style="left: 700px; top: 250px;" id="card-2">
+      <div class="panel-header"><span class="time-stamp">02:30 PM</span><span class="sys-id">SEQ_03</span></div>
+      <h3 class="event-title" data-value="Review Sequence 1">Review Sequence 1</h3>
+      <p class="event-desc" data-value="Mentors begin first pass. Teams present initial logic flows and blueprints.">Mentors begin first pass. Teams present initial logic flows and blueprints.</p>
+    </div>
+    <div class="event-block push-left" style="left: 680px; top: 500px;" id="card-3">
+      <div class="panel-header"><span class="time-stamp">07:00 PM</span><span class="sys-id">SEQ_04</span></div>
+      <h3 class="event-title" data-value="Evening Rations">Evening Rations</h3>
+      <p class="event-desc" data-value="Dinner served. A brief window to network and debug with peers.">Dinner served. A brief window to network and debug with peers.</p>
+    </div>
+    <div class="event-block push-up" style="left: 450px; top: 700px;" id="card-4">
+      <div class="panel-header"><span class="time-stamp">11:30 PM</span><span class="sys-id">SEQ_05</span></div>
+      <h3 class="event-title" data-value="Review Sequence 2">Review Sequence 2</h3>
+      <p class="event-desc" data-value="Late-night inspection. Backend integration checks before midnight freeze.">Late-night inspection. Backend integration checks before midnight freeze.</p>
+    </div>
+    <div class="event-block push-right" style="left: 200px; top: 600px;" id="card-5">
+      <div class="panel-header"><span class="time-stamp">06:00 AM</span><span class="sys-id">SEQ_06</span></div>
+      <h3 class="event-title" data-value="Day 1 Concludes">Day 1 Concludes</h3>
+      <p class="event-desc" data-value="Morning break. Cycle down operations, grab caffeine, push commits.">Morning break. Cycle down operations, grab caffeine, push commits.</p>
+    </div>
+    <div class="event-block push-right" style="left: 120px; top: 350px;" id="card-6">
+      <div class="panel-header"><span class="time-stamp">09:00 AM</span><span class="sys-id">SEQ_07</span></div>
+      <h3 class="event-title" data-value="Sprint Resumes">Sprint Resumes</h3>
+      <p class="event-desc" data-value="Final stretch initiated. Compile remaining assets and demo builds.">Final stretch initiated. Compile remaining assets and demo builds.</p>
+    </div>
+    <div class="event-block push-left" style="left: 330px; top: 250px;" id="card-7">
+      <div class="panel-header"><span class="time-stamp">02:30 PM</span><span class="sys-id">SEQ_08</span></div>
+      <h3 class="event-title" data-value="Final Judgement">Final Judgement</h3>
+      <p class="event-desc" data-value="Terminal freeze. Teams deliver final presentations to the executive panel.">Terminal freeze. Teams deliver final presentations to the executive panel.</p>
+    </div>
+    <div class="event-block push-center" style="left: 400px; top: 400px;" id="card-8">
+      <div class="panel-header"><span class="time-stamp">03:45 PM</span><span class="sys-id">SEQ_09</span></div>
+      <h3 class="event-title" data-value="System Shutdown">System Shutdown</h3>
+      <p class="event-desc" data-value="Final speech. Winners are announced and the hackathon officially concludes.">Final speech. Winners are announced and the hackathon officially concludes.</p>
+    </div>
+
+    <svg class="fiber-svg" viewBox="0 0 800 800" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="arrowThrustGrad" x1="100%" y1="0%" x2="0%" y2="0%">
+          <stop offset="0%" stop-color="#ffffff"/>
+          <stop offset="35%" stop-color="#42ff5a"/>
+          <stop offset="85%" stop-color="rgba(66, 255, 90, 0.4)"/>
+          <stop offset="100%" stop-color="rgba(0, 255, 60, 0)"/>
+        </linearGradient>
+
+        <filter id="intenseGlow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur1" />
+          <feGaussianBlur in="SourceGraphic" stdDeviation="8" result="blur2" />
+          <feMerge>
+            <feMergeNode in="blur2" />
+            <feMergeNode in="blur1" />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+
+        <g id="advanced-nodule">
+          <path class="nodule-crosshair" d="
+            M -30 0 L -14 0 M -22 -3 L -22 3
+            M 14 0 L 30 0 M 22 -3 L 22 3
+            M 0 -30 L 0 -14 M -3 -22 L 3 -22
+            M 0 14 L 0 30 M -3 22 L 3 22
+          " />
+          <circle class="nodule-outer" cx="0" cy="0" r="16" />
+          <polygon class="nodule-hexagon" points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" />
+          <circle class="nodule-core" cx="0" cy="0" r="2.5" />
+        </g>
+      </defs>
+
+      <!-- HARDCODED STROKE DASHARRAY PREVENTS FLASH OF UNSTYLED PATH ON LOAD -->
+      <path id="oldSegment" class="wire-active" stroke-width="2" style="opacity: 0.1; stroke-dasharray: 0 100000; stroke-dashoffset: 0;" filter="blur(2px)" />
+      <path id="prevSegment" class="wire-active" stroke-width="4" style="opacity: 0.3; stroke-dasharray: 0 100000; stroke-dashoffset: 0;" filter="blur(1px)" />
+      <path id="activeSegment" class="wire-active" stroke-width="6" style="opacity: 0.8; stroke-dasharray: 0 100000; stroke-dashoffset: 0;" filter="url(#intenseGlow)" />
+
+      <g id="burstLayer"></g>
+
+      <use href="#advanced-nodule" x="100" y="150" class="node-instance" id="node-0" />
+      <use href="#advanced-nodule" x="400" y="120" class="node-instance" id="node-1" />
+      <use href="#advanced-nodule" x="700" y="250" class="node-instance" id="node-2" />
+      <use href="#advanced-nodule" x="680" y="500" class="node-instance" id="node-3" />
+      <use href="#advanced-nodule" x="450" y="700" class="node-instance" id="node-4" />
+      <use href="#advanced-nodule" x="200" y="600" class="node-instance" id="node-5" />
+      <use href="#advanced-nodule" x="120" y="350" class="node-instance" id="node-6" />
+      <use href="#advanced-nodule" x="330" y="250" class="node-instance" id="node-7" />
+      
+      <g class="node-instance" id="node-8" transform="translate(400, 400)">
+        <path class="nodule-crosshair" d="
+          M -45 0 L -21 0 M -33 -4 L -33 4
+          M 21 0 L 45 0 M 33 -4 L 33 4
+          M 0 -45 L 0 -21 M -4 -33 L 4 -33
+          M 0 21 L 0 45 M -4 33 L 4 33
+        " />
+        <circle class="nodule-outer" cx="0" cy="0" r="24" stroke-dasharray="4 8" />
+        <polygon class="nodule-hexagon" points="0,-15 13,-7.5 13,7.5 0,15 -13,7.5 -13,-7.5" />
+        <circle class="nodule-core" cx="0" cy="0" r="4" />
+      </g>
+
+      <g id="dataPacket">
+        <circle class="rocket-approach-ring" cx="0" cy="0" r="22" />
+        <circle class="arrow-arrival-reticle" cx="0" cy="0" r="16" />
+        
+        <path class="arrow-thrust-core" d="M -10 -4 C -22 -6, -42 -4, -65 0 C -42 4, -22 6, -10 4 Z" />
+        <circle class="arrow-spark" cx="-26" cy="-3.5" r="1.1" />
+        <circle class="arrow-spark" cx="-40" cy="2.5" r="1.3" />
+        <circle class="arrow-spark" cx="-55" cy="-1.5" r="0.9" />
+        <path class="arrow-side-fin" d="M -13 -13 L -6 -8" />
+        <path class="arrow-side-fin" d="M -13 13 L -6 8" />
+        <polygon class="arrow-outer-body" points="14,0 -10,-9 -6,0 -10,9" />
+        <polyline class="arrow-inner-chevron" points="-4,-5 8,0 -4,5" />
+        <circle class="arrow-tip-node" cx="14" cy="0" r="1.8" />
+      </g>
+    </svg>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/ScrollTrigger.min.js"></script>
+
+<script>
+  // Force scroll to top on load to prevent jumping/flashing
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual';
+  }
+  window.scrollTo(0, 0);
+
+  // --- PROCEDURAL RANDOM PATH GENERATOR (STRAIGHT LINES) ---
+  const baseNodes = [
+    {x: 100, y: 150}, {x: 400, y: 120}, {x: 700, y: 250}, {x: 680, y: 500},
+    {x: 450, y: 700}, {x: 200, y: 600}, {x: 120, y: 350}, {x: 330, y: 250}, {x: 400, y: 400}
+  ];
+
+  let pathPoints = [];
+  for(let i = 0; i < baseNodes.length; i++) {
+    pathPoints.push(baseNodes[i]);
+    if(i < baseNodes.length - 1) {
+      let rx = (baseNodes[i].x + baseNodes[i+1].x) / 2 + (Math.random() - 0.5) * 450;
+      let ry = (baseNodes[i].y + baseNodes[i+1].y) / 2 + (Math.random() - 0.5) * 450;
+      rx = Math.max(80, Math.min(720, rx));
+      ry = Math.max(80, Math.min(720, ry));
+      pathPoints.push({x: rx, y: ry});
+    }
+  }
+
+  function generateStraightPath(points) {
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      d += ` L ${points[i].x} ${points[i].y}`;
+    }
+    return d;
+  }
+
+  const generatedPath = generateStraightPath(pathPoints);
+  const oldSegment = document.getElementById("oldSegment");
+  const prevSegment = document.getElementById("prevSegment");
+  const activeSegment = document.getElementById("activeSegment");
+
+  oldSegment.setAttribute("d", generatedPath);
+  prevSegment.setAttribute("d", generatedPath);
+  activeSegment.setAttribute("d", generatedPath);
+
+  // --- INITIALIZE TIMELINE LOGIC ---
+  gsap.registerPlugin(ScrollTrigger);
+
+  const dataPacket = document.getElementById("dataPacket");
+  const eventBlocks = document.querySelectorAll(".event-block");
+  const nodeInstances = document.querySelectorAll(".node-instance");
+  const burstLayer = document.getElementById("burstLayer");
+  
+  const clockHour = document.getElementById("clockHour");
+  const clockMin = document.getElementById("clockMin");
+  const clockDigitalSvg = document.getElementById("clockDigitalSvg");
+  
+  const pathLength = activeSegment.getTotalLength();
+  
+  // Guarantee the path starts hidden immediately via JS to back up the CSS
+  [activeSegment, prevSegment, oldSegment].forEach(el => {
+    el.style.strokeDasharray = `0 ${pathLength * 2}`;
+    el.style.strokeDashoffset = `0`;
+  });
+
+  const nodeProgresses = [];
+  let currentSearchStart = 0;
+  
+  nodeInstances.forEach((node, index) => {
+    let nx = index === 8 ? 400 : parseFloat(node.getAttribute("x"));
+    let ny = index === 8 ? 400 : parseFloat(node.getAttribute("y"));
+    
+    let minDst = Infinity;
+    let closestLen = currentSearchStart;
+    
+    for(let i = currentSearchStart; i <= pathLength; i += 1) {
+      const pt = activeSegment.getPointAtLength(i);
+      const dst = Math.hypot(pt.x - nx, pt.y - ny);
+      if(dst < minDst) {
+        minDst = dst;
+        closestLen = i;
+      }
+      if(minDst < 1 && dst > 5) break; 
+    }
+    currentSearchStart = closestLen;
+    nodeProgresses.push(closestLen / pathLength);
+  });
+  
+  nodeProgresses[nodeProgresses.length - 1] = 1.0;
+
+  const nodeTimes = [ 480, 660, 870, 1140, 1410, 1800, 1980, 2310, 2385 ];
+
+  function formatTime(totalMinutes) {
+    let h = Math.floor(totalMinutes / 60) % 24;
+    let m = Math.floor(totalMinutes % 60);
+    let ampm = h >= 12 && h < 24 ? 'PM' : 'AM';
+    if (h === 0 || h === 24) h = 12;
+    else if (h > 12) h -= 12;
+    let hh = h < 10 ? '0' + h : h;
+    let mm = m < 10 ? '0' + m : m;
+    return `${hh}:${mm} ${ampm}`;
+  }
+  
+  const nodeFired = new Array(eventBlocks.length).fill(false);
+  const cipherLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*";
+
+  function scrambleText(element) {
+    if (!element) return;
+    let iterations = 0;
+    const finalValue = element.dataset.value;
+    const speed = finalValue.length > 30 ? 1 : 1/3; 
+    const interval = setInterval(() => {
+      element.innerText = finalValue.split("")
+        .map((letter, index) => {
+          if(index < iterations) return finalValue[index];
+          if(letter === " ") return " ";
+          return cipherLetters[Math.floor(Math.random() * cipherLetters.length)];
+        }).join("");
+      if(iterations >= finalValue.length) clearInterval(interval);
+      iterations += speed;
+    }, 20);
+  }
+
+  function fireBurst(x, y) {
+    const particleCount = 20;
+    for(let i=0; i<particleCount; i++) {
+      const isWhite = Math.random() > 0.6;
+      const rect = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+      rect.setAttribute("r", isWhite ? "1.5" : "2.5");
+      rect.setAttribute("fill", isWhite ? "#ffffff" : "#42ff5a");
+      rect.setAttribute("cx", x);
+      rect.setAttribute("cy", y);
+      burstLayer.appendChild(rect);
+
+      const angle = (Math.PI * 2 / particleCount) * i;
+      const distance = 40 + Math.random() * 60;
+      
+      gsap.to(rect, {
+        attr: { cx: x + Math.cos(angle) * distance, cy: y + Math.sin(angle) * distance },
+        opacity: 0,
+        duration: 0.5 + Math.random() * 0.7,
+        ease: "power3.out",
+        onComplete: () => rect.remove()
+      });
+    }
+  }
+
+  function getMagneticProgress(p) {
+    const lockWindow = 0.02; 
+    for (let i = 0; i < nodeProgresses.length; i++) {
+      if (Math.abs(p - nodeProgresses[i]) <= lockWindow) return nodeProgresses[i]; 
+    }
+    let startP = 0, startMap = 0, endP = 1, endMap = 1;
+    for (let i = 0; i < nodeProgresses.length; i++) {
+      if (p < nodeProgresses[i] - lockWindow) {
+        endP = nodeProgresses[i] - lockWindow; endMap = nodeProgresses[i]; break;
+      }
+      startP = nodeProgresses[i] + lockWindow; startMap = nodeProgresses[i];
+    }
+    if (endP === startP) return startMap;
+    let ratio = (p - startP) / (endP - startP);
+    ratio = (Math.sin((ratio - 0.5) * Math.PI) + 1) / 2;
+    return startMap + ratio * (endMap - startMap);
+  }
+
+  function updateSegment(element, startP, endP) {
+    const start = startP * pathLength;
+    const end = endP * pathLength;
+    const len = Math.max(0, end - start);
+    element.style.strokeDasharray = `${len} ${pathLength * 2}`;
+    element.style.strokeDashoffset = -start;
+  }
+
+  const scroller = ScrollTrigger.create({
+    trigger: "body",
+    start: "top top", 
+    end: "bottom bottom",
+    scrub: 1.2, 
+    onUpdate: (self) => {
+      const magneticProgress = getMagneticProgress(self.progress);
+
+      const telemetryFill = document.getElementById("telemetryFill");
+      const telemetryText = document.getElementById("telemetryText");
+      telemetryFill.style.height = `${self.progress * 100}%`;
+      telemetryText.innerText = `SYS_LOAD: ${Math.round(self.progress * 100)}%`;
+
+      let lastNodeIndex = 0;
+      for (let i = 0; i < nodeProgresses.length; i++) {
+        if (magneticProgress >= nodeProgresses[i] - 0.001) lastNodeIndex = i;
+      }
+
+      updateSegment(activeSegment, nodeProgresses[lastNodeIndex], magneticProgress);
+      if (lastNodeIndex >= 1) {
+        updateSegment(prevSegment, nodeProgresses[lastNodeIndex - 1], nodeProgresses[lastNodeIndex]);
+      } else {
+        updateSegment(prevSegment, 0, 0);
+      }
+      if (lastNodeIndex >= 2) {
+        updateSegment(oldSegment, nodeProgresses[lastNodeIndex - 2], nodeProgresses[lastNodeIndex - 1]);
+      } else {
+        updateSegment(oldSegment, 0, 0);
+      }
+
+      const currentPoint = activeSegment.getPointAtLength(pathLength * magneticProgress);
+      const nextPoint = activeSegment.getPointAtLength(Math.min(pathLength, (pathLength * magneticProgress) + 2));
+      const angle = Math.atan2(nextPoint.y - currentPoint.y, nextPoint.x - currentPoint.x) * (180 / Math.PI);
+      
+      let currentTimeInMinutes = nodeTimes[0];
+      for (let i = 0; i < nodeProgresses.length - 1; i++) {
+        if (magneticProgress >= nodeProgresses[i] && magneticProgress <= nodeProgresses[i+1]) {
+          const ratio = (magneticProgress - nodeProgresses[i]) / (nodeProgresses[i+1] - nodeProgresses[i]);
+          currentTimeInMinutes = nodeTimes[i] + (ratio * (nodeTimes[i+1] - nodeTimes[i]));
+          break;
+        }
+      }
+      if (magneticProgress >= nodeProgresses[nodeProgresses.length - 1]) currentTimeInMinutes = nodeTimes[nodeTimes.length - 1];
+
+      const minuteAngle = (currentTimeInMinutes / 60) * 360;
+      const hourAngle = (currentTimeInMinutes / 720) * 360;
+      gsap.set(clockMin, { rotation: minuteAngle, svgOrigin: "180 180" });
+      gsap.set(clockHour, { rotation: hourAngle, svgOrigin: "180 180" });
+      clockDigitalSvg.textContent = formatTime(currentTimeInMinutes);
+
+      let activeIndex = -1;
+      for (let i = 0; i < nodeProgresses.length; i++) {
+        if (Math.abs(magneticProgress - nodeProgresses[i]) < 0.0001) activeIndex = i;
+      }
+
+      if (activeIndex !== -1) {
+        const nodeX = nodeInstances[activeIndex].getAttribute("x") || 400; 
+        const nodeY = nodeInstances[activeIndex].getAttribute("y") || 400;
+        if(activeIndex !== 8) dataPacket.setAttribute("transform", `translate(${nodeX}, ${nodeY}) rotate(${angle})`);
+      } else {
+        dataPacket.setAttribute("transform", `translate(${currentPoint.x}, ${currentPoint.y}) rotate(${angle})`);
+      }
+
+      // Ensure rocket stays visible after initially hiding it
+      dataPacket.style.opacity = "1";
+
+      let isApproachingAny = false;
+
+      eventBlocks.forEach((block, index) => {
+        const node = nodeInstances[index];
+        let nx = index === 8 ? 400 : parseFloat(node.getAttribute("x") || 400);
+        let ny = index === 8 ? 400 : parseFloat(node.getAttribute("y") || 400);
+        
+        let distToBlob = Math.hypot(currentPoint.x - nx, currentPoint.y - ny);
+
+        // Dynamically fade nodes to match the tail segments
+        if (index === lastNodeIndex + 1) node.style.opacity = "1";
+        else if (index === lastNodeIndex) node.style.opacity = "1";
+        else if (index === lastNodeIndex - 1) node.style.opacity = "0.3";
+        else if (index === lastNodeIndex - 2) node.style.opacity = "0.1";
+        else node.style.opacity = "0";
+        
+        // Approaching logic
+        if (distToBlob < 100 && index > lastNodeIndex && !node.classList.contains("illuminated")) {
+          node.classList.add("approaching");
+          isApproachingAny = true;
+        } else {
+          node.classList.remove("approaching");
+        }
+
+        // Lock-in Snap logic
+        if (index === activeIndex) {
+          if (!block.classList.contains("revealed")) {
+            block.classList.add("revealed");
+            node.classList.add("illuminated");
+            node.classList.remove("approaching"); 
+            
+            if (!nodeFired[index]) {
+              nodeFired[index] = true;
+              fireBurst(nx, ny);
+              scrambleText(block.querySelector(".event-title"));
+              scrambleText(block.querySelector(".event-desc"));
+            }
+          }
+        } else {
+          block.classList.remove("revealed");
+          node.classList.remove("illuminated");
+          nodeFired[index] = false; 
+        }
+      });
+
+      if (isApproachingAny && activeIndex === -1) {
+        dataPacket.classList.add("approaching");
+      } else {
+        dataPacket.classList.remove("approaching");
+      }
+      
+      // Control Snapped Class for Rocket
+      if (activeIndex !== -1) {
+        dataPacket.classList.add("snapped");
+      } else {
+        dataPacket.classList.remove("snapped");
+      }
+    }
+  });
+
+  // Manually fire the initial state setup
+  ScrollTrigger.refresh();
+  if (scroller) scroller.update(0, 0);
+
+</script>
+</body>
+</html>
