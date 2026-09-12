@@ -5,6 +5,19 @@ import type { CSSProperties } from "react";
 
 const COUNTDOWN_TARGET = new Date("2026-09-16T08:00:00");
 
+/* ========================================
+   POSITION / SIZE CONTROLS
+   Tweak these to reposition or resize the countdown clock and the logo.
+   Everything below imports from this one block. */
+const CLOCK_OFFSET_X = -40; // px, + moves right
+const CLOCK_OFFSET_Y = 50; // px, + moves down
+const CLOCK_SCALE = 0.85; // 1 = 100% size
+
+const LOGO_OFFSET_X = 0; // px, + moves right
+const LOGO_OFFSET_Y = 80; // px, + moves down
+const LOGO_SCALE = 0.75; // 1 = 100% size
+/* ======================================== */
+
 type TimeLeft = {
   days: number;
   hours: number;
@@ -25,38 +38,23 @@ function getTimeLeft(): TimeLeft {
 
 const FLIP_DURATION_MS = 880;
 
-/* Metallic brushed-panel look, matched to the reference photo:
-   - a soft specular highlight sitting at the top corner where the two
-     digit panels meet (brightest right at the seam, fading outward and
-     downward)
-   - fine brushed-metal streaks
-   - a very subtle vertical darkening from top to bottom
-   `innerSide` is the side of the panel that faces the other digit in the
-   pair (that's where the seam highlight lives). The outer side (away from
-   the other digit) stays flat and darker, matching the photo. */
-function metallicTop(innerSide: "left" | "right"): CSSProperties {
-  return {
-    backgroundImage:
-      // sharp specular seam highlight
-      `radial-gradient(ellipse 70% 160% at ${innerSide} top, rgba(255,255,255,0.55) 0%, rgba(255,255,255,0.12) 30%, rgba(255,255,255,0) 60%), ` +
-      // wide soft sheen sweeping across the panel (gives the "brushed aluminum under light" look)
-      `linear-gradient(${innerSide === "left" ? "115deg" : "245deg"}, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0.02) 35%, rgba(255,255,255,0.08) 55%, rgba(255,255,255,0) 80%), ` +
-      // fine brushed-metal streaks
-      "repeating-linear-gradient(93deg, rgba(255,255,255,0.06) 0px, rgba(255,255,255,0.06) 1px, rgba(0,0,0,0.05) 1px, rgba(0,0,0,0.05) 2px, transparent 2px, transparent 4px), " +
-      // subtle green metallic tint + base steel gradient
-      "linear-gradient(180deg, #454b46 0%, #383e3a 55%, #2f332f 100%)",
-    boxShadow: "inset 0 1px 0 rgba(255,255,255,0.25), inset 0 -6px 10px -6px rgba(0,0,0,0.6)",
-  };
-}
+/* The panel face is now the actual reference photo (digit removed, hinge
+   pin and crease baked in) rather than a CSS gradient. One asset per hinge
+   side — flip-panel-right.png is a mirror of flip-panel-left.png — so the
+   flip animation's transform isn't fighting a CSS mirror on the same
+   element. Each half shows one slice of the image via background-size
+   "100% 200%" + background-position top/bottom. */
+const PANEL_IMAGE: Record<"left" | "right", string> = {
+  left: "/flip-panel-left.png",
+  right: "/flip-panel-right.png",
+};
 
-function metallicBottom(innerSide: "left" | "right"): CSSProperties {
+function panelHalfStyle(hinge: "left" | "right", half: "top" | "bottom"): CSSProperties {
   return {
-    backgroundImage:
-      `radial-gradient(ellipse 70% 150% at ${innerSide} top, rgba(255,255,255,0.32) 0%, rgba(255,255,255,0.06) 32%, rgba(255,255,255,0) 55%), ` +
-      `linear-gradient(${innerSide === "left" ? "115deg" : "245deg"}, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0.01) 40%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0) 85%), ` +
-      "repeating-linear-gradient(93deg, rgba(255,255,255,0.045) 0px, rgba(255,255,255,0.045) 1px, rgba(0,0,0,0.06) 1px, rgba(0,0,0,0.06) 2px, transparent 2px, transparent 4px), " +
-      "linear-gradient(180deg, #383e39 0%, #2e332e 45%, #242825 100%)",
-    boxShadow: "inset 0 -1px 0 rgba(0,0,0,0.5), inset 0 6px 10px -6px rgba(255,255,255,0.06)",
+    backgroundImage: `url(${PANEL_IMAGE[hinge]})`,
+    backgroundSize: "100% 200%",
+    backgroundPosition: half === "top" ? "top" : "bottom",
+    backgroundRepeat: "no-repeat",
   };
 }
 
@@ -69,9 +67,8 @@ function DigitCard({
 }) {
   const [displayValue, setDisplayValue] = useState(digit);
   const isFlipping = displayValue !== digit;
-  const innerSide = hinge === "left" ? "right" : "left";
-  const topStyle = metallicTop(innerSide);
-  const bottomStyle = metallicBottom(innerSide);
+  const topStyle = panelHalfStyle(hinge, "top");
+  const bottomStyle = panelHalfStyle(hinge, "bottom");
 
   const numberClassName =
     "absolute inset-x-0 top-0 flex h-[76px] items-center justify-center font-sans text-4xl font-bold tracking-tight text-[#42ff5a] sm:h-[104px] sm:text-6xl";
@@ -87,7 +84,7 @@ function DigitCard({
   return (
     <div className="relative">
       <div
-        className="relative h-[76px] w-[42px] overflow-hidden rounded-2xl bg-[#3a4039] shadow-[0_10px_30px_rgba(0,0,0,0.55),0_0_16px_rgba(66,255,90,0.18)] sm:h-[104px] sm:w-[57px] sm:rounded-3xl"
+        className="relative h-[76px] w-[42px] overflow-hidden rounded-md bg-[#3a4039] shadow-[0_10px_30px_rgba(0,0,0,0.55),0_0_16px_rgba(66,255,90,0.18)] sm:h-[104px] sm:w-[57px] sm:rounded-lg"
         style={{ perspective: "260px" }}
       >
         {/* Top half */}
@@ -118,27 +115,7 @@ function DigitCard({
             <span className={numberClassName} style={numberStyle}>{displayValue}</span>
           </div>
         )}
-
-        {/* Center crease */}
-        <span
-          className="pointer-events-none absolute left-0 top-1/2 z-20 h-[2px] w-full -translate-y-1/2 bg-black/60 shadow-[0_1px_0_rgba(255,255,255,0.08)]"
-          aria-hidden="true"
-        />
       </div>
-
-      {/* Hinge pin — only on the outward-facing edge of the pair */}
-      {hinge === "left" && (
-        <span
-          className="pointer-events-none absolute left-[-4px] top-1/2 z-30 h-[12px] w-[8px] -translate-y-1/2 rounded-[2px] bg-[#2a2a28] shadow-[inset_0_0_2px_rgba(0,0,0,0.6)] sm:left-[-5px] sm:h-[18px] sm:w-[11px]"
-          aria-hidden="true"
-        />
-      )}
-      {hinge === "right" && (
-        <span
-          className="pointer-events-none absolute right-[-4px] top-1/2 z-30 h-[12px] w-[8px] -translate-y-1/2 rounded-[2px] bg-[#2a2a28] shadow-[inset_0_0_2px_rgba(0,0,0,0.6)] sm:right-[-5px] sm:h-[18px] sm:w-[11px]"
-          aria-hidden="true"
-        />
-      )}
     </div>
   );
 }
@@ -177,9 +154,6 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
-// Tweak this to nudge the whole clock left (negative) or right (positive).
-const CLOCK_OFFSET_X = 0;
-
 function CountdownClock() {
   const [time, setTime] = useState<TimeLeft>(getTimeLeft());
 
@@ -192,7 +166,11 @@ function CountdownClock() {
   }, []);
 
   return (
-    <div style={{ transform: `translateX(${CLOCK_OFFSET_X}px)` }}>
+    <div
+      style={{
+        transform: `translate(${CLOCK_OFFSET_X}px, ${CLOCK_OFFSET_Y}px) scale(${CLOCK_SCALE})`,
+      }}
+    >
       <div className="relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3">
         <FlipUnit value={time.days} label="Days" />
         <FlipSeparator />
@@ -286,6 +264,9 @@ export default function Hero() {
       <div
         ref={logoWrapperRef}
         className="relative z-10 w-[85vw] max-w-[950px] [transform-style:preserve-3d] will-change-transform transition-transform duration-100 ease-out pointer-events-auto [@media(orientation:landscape)]:[@media(max-height:600px)]:w-[70vw] [@media(orientation:landscape)]:[@media(max-height:600px)]:max-w-[800px]"
+        style={{
+          transform: `translate(${LOGO_OFFSET_X}px, ${LOGO_OFFSET_Y}px) scale(${LOGO_SCALE})`,
+        }}
       >
         <div
           ref={logoGlowRef}
@@ -296,7 +277,7 @@ export default function Hero() {
         <img
           ref={logoImgRef}
           className="relative z-[2] block h-auto w-full select-none [-webkit-user-drag:none] [filter:drop-shadow(0_0_20px_rgba(66,255,90,0.1))]"
-          src="/logo.png"
+          src="/NewLogo.png"
           alt="HACKGRID 2026"
           draggable={false}
         />
@@ -306,7 +287,7 @@ export default function Hero() {
           className="absolute inset-0 z-[3] opacity-0 overflow-hidden pointer-events-none [&>img]:absolute [&>img]:w-full [&>img]:h-full [&>img]:object-contain [&>img]:hue-rotate-90"
           aria-hidden="true"
         >
-          <img src="/logo.png" alt="" />
+          <img src="/NewLogo.png" alt="" />
         </div>
 
         <div
@@ -314,7 +295,7 @@ export default function Hero() {
           className="absolute inset-0 z-[3] opacity-0 overflow-hidden pointer-events-none [&>img]:absolute [&>img]:w-full [&>img]:h-full [&>img]:object-contain [&>img]:hue-rotate-180"
           aria-hidden="true"
         >
-          <img src="/logo.png" alt="" />
+          <img src="/NewLogo.png" alt="" />
         </div>
 
         <div
@@ -322,7 +303,7 @@ export default function Hero() {
           className="absolute inset-0 z-[3] opacity-0 overflow-hidden pointer-events-none [&>img]:absolute [&>img]:w-full [&>img]:h-full [&>img]:object-contain [&>img]:brightness-200"
           aria-hidden="true"
         >
-          <img src="/logo.png" alt="" />
+          <img src="/NewLogo.png" alt="" />
         </div>
 
         <div
