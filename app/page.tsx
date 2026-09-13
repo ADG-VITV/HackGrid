@@ -1,5 +1,7 @@
 import BulgeGrid from "@/components/BulgeGrid";
 import Hero from "@/components/hero/hero";
+import ADG_details from "@/components/aboutADG/ADG_details";
+import HackDetails from "@/components/about_hack/HackDetails";
 
 export default function Home() {
   return (
@@ -9,7 +11,8 @@ export default function Home() {
         <Hero />
       </section>
 
-      
+      <ADG_details />
+      <HackDetails />
     </>
   );
 }
