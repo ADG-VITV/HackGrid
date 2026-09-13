@@ -1,12 +1,13 @@
 'use client';
+
 import React, { useRef, useEffect } from 'react';
 
-export default function BulgeGrid() {
+export default function BulgeGrid(): React.JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  
+
   // Track actual mouse vs animated target for smooth lagging effect
-  const mouseRef = useRef({ x: -1000, y: -1000 });
-  const targetMouseRef = useRef({ x: -1000, y: -1000 });
+  const mouseRef = useRef<{ x: number; y: number }>({ x: -1000, y: -1000 });
+  const targetMouseRef = useRef<{ x: number; y: number }>({ x: -1000, y: -1000 });
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -16,24 +17,33 @@ export default function BulgeGrid() {
 
     let animationFrameId: number;
 
-    const resize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
+    // Dynamically match element dimensions to prevent any cropped boundaries
+    const resize = (): void => {
+      const rect = canvas.getBoundingClientRect();
+      canvas.width = Math.ceil(rect.width) || window.innerWidth;
+      canvas.height = Math.ceil(rect.height) || window.innerHeight;
     };
+
     window.addEventListener('resize', resize);
     resize();
 
-    const handleMouseMove = (e: MouseEvent) => {
-      targetMouseRef.current = { x: e.clientX, y: e.clientY };
+    // Map mouse position relative to canvas bounding box
+    const handleMouseMove = (e: MouseEvent): void => {
+      const rect = canvas.getBoundingClientRect();
+      targetMouseRef.current = {
+        x: e.clientX - rect.left,
+        y: e.clientY - rect.top,
+      };
     };
-    const handleMouseLeave = () => {
+
+    const handleMouseLeave = (): void => {
       targetMouseRef.current = { x: -1000, y: -1000 };
     };
 
     window.addEventListener('mousemove', handleMouseMove);
     window.addEventListener('mouseout', handleMouseLeave);
 
-    const draw = () => {
+    const draw = (): void => {
       // Smooth interpolation for the mouse coordinates
       mouseRef.current.x += (targetMouseRef.current.x - mouseRef.current.x) * 0.15;
       mouseRef.current.y += (targetMouseRef.current.y - mouseRef.current.y) * 0.15;
@@ -41,15 +51,15 @@ export default function BulgeGrid() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
       const spacing = 45; // Size of the squares
-      const cols = Math.floor(canvas.width / spacing) + 2;
-      const rows = Math.floor(canvas.height / spacing) + 2;
+      const cols = Math.ceil(canvas.width / spacing) + 4;
+      const rows = Math.ceil(canvas.height / spacing) + 4;
 
-      // Bulge settings matching your screenshot's concept
+      // Bulge settings matching your concept
       const maxDist = 250; // Cursor Radius
       const bulgeStrength = 65; // Bulge Strength
 
       // Math function to distort the grid intersections
-      const getPoint = (c: number, r: number) => {
+      const getPoint = (c: number, r: number): { x: number; y: number } => {
         let x = c * spacing;
         let y = r * spacing;
 
@@ -58,11 +68,10 @@ export default function BulgeGrid() {
         const dist = Math.sqrt(dx * dx + dy * dy);
 
         if (dist < maxDist && dist > 0) {
-          // Calculate how hard to push the line based on how close the mouse is
           const falloff = Math.pow(1 - dist / maxDist, 2);
           const push = bulgeStrength * falloff;
-          
-          // Apply the outward push vector
+
+          // Outward push vector
           x += (dx / dist) * push;
           y += (dy / dist) * push;
         }
@@ -70,26 +79,26 @@ export default function BulgeGrid() {
       };
 
       ctx.lineWidth = 1;
-      // White grid color with low opacity for the static look
-      ctx.strokeStyle = "rgba(106, 193, 93, 0.3)"; 
+      // High-definition neon green line visible through ambient glows
+      ctx.strokeStyle = 'rgba(66, 255, 90, 0.42)';
 
-      // Draw the distorted horizontal lines
-      for (let r = -1; r <= rows; r++) {
+      // Draw distorted horizontal lines across full vertical range
+      for (let r = -2; r <= rows; r++) {
         ctx.beginPath();
-        for (let c = -1; c <= cols; c++) {
+        for (let c = -2; c <= cols; c++) {
           const p = getPoint(c, r);
-          if (c === -1) ctx.moveTo(p.x, p.y);
+          if (c === -2) ctx.moveTo(p.x, p.y);
           else ctx.lineTo(p.x, p.y);
         }
         ctx.stroke();
       }
 
-      // Draw the distorted vertical lines
-      for (let c = -1; c <= cols; c++) {
+      // Draw distorted vertical lines across full horizontal range
+      for (let c = -2; c <= cols; c++) {
         ctx.beginPath();
-        for (let r = -1; r <= rows; r++) {
+        for (let r = -2; r <= rows; r++) {
           const p = getPoint(c, r);
-          if (r === -1) ctx.moveTo(p.x, p.y);
+          if (r === -2) ctx.moveTo(p.x, p.y);
           else ctx.lineTo(p.x, p.y);
         }
         ctx.stroke();
@@ -111,7 +120,7 @@ export default function BulgeGrid() {
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 w-full h-full pointer-events-none z-0 bg-[#030704]"
+      className="absolute inset-0 h-full w-full pointer-events-none z-0 block"
     />
   );
 }
