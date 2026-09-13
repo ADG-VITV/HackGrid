@@ -244,7 +244,7 @@ export function BiddingClient() {
               Reset event
             </button>
             <span className="text-[0.62rem] text-zinc-600">
-              One press runs all five rounds in order; each opens the next when it settles.
+              One press runs all {auctionTiles.length} rounds in order; each opens the next when it settles.
             </span>
           </div>
         ) : null}

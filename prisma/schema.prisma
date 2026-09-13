@@ -109,7 +109,7 @@ model Event {
   id             String   @id @default(cuid())
   key            String   @unique
   name           String
-  startingBudget Int      @default(1000)
+  startingBudget Int      @default(10000)
   createdAt      DateTime @default(now()) @db.Timestamptz(3)
 
   teams    Team[]
@@ -118,15 +118,16 @@ model Event {
   @@map("events")
 }
 
-/// An auction round: Track/Domain, AI Rights, AI Capability, Dataset Tier,
-/// Integration Rights. `key` matches the tile id in app/bidding/auction-data.ts.
+/// An auction round: Track Auction, AI Rights, AI Capability, Customer Segment —
+/// always in that order. `key` matches the tile id in lib/auction-catalog.mjs.
 model Capsule {
   id            String        @id @default(cuid())
   eventId       String
   key           String
   name          String
-  /// Null until the running order is announced on the day (rulebook 2 and 8).
-  sequenceOrder Int?
+  /// Fixed position in the running order. The order is static: it is the
+  /// array order of lib/auction-catalog.mjs and never changes at runtime.
+  sequenceOrder Int
   status        CapsuleStatus @default(PENDING)
   startedAt     DateTime?     @db.Timestamptz(3)
   createdAt     DateTime      @default(now()) @db.Timestamptz(3)
