@@ -218,7 +218,7 @@ export function BiddingClient() {
       return eventComplete
         ? "Every round is finished. Your final product spec is in the Resource Manager."
         : IS_DEV
-          ? "No round is live. Hit Force on a capsule to draw its pods. Nothing opens on its own — every capsule waits for Force."
+          ? "No round is live. Hit Start event to prepare every round's pods, then open one from /admin or with Force here. Nothing opens on its own."
           : "The auction has not started yet. This page will come alive when the first round opens.";
     }
     if (!liveCapsule.podId) {
@@ -263,7 +263,7 @@ export function BiddingClient() {
               Reset event
             </button>
             <span className="text-[0.62rem] text-zinc-600">
-              Start event opens round 1 only. Each of the {auctionTiles.length} capsules opens on its own Force, with pods reshuffled every time.
+              Start event prepares all {auctionTiles.length} rounds and locks in their pods; it opens nothing. Force opens a round out of order, closing whichever was live.
             </span>
           </div>
         ) : null}
@@ -430,7 +430,7 @@ export function BiddingClient() {
         </section>
 
         <p className="pb-2 text-center text-[0.62rem] text-zinc-700">
-          Rounds run one at a time in order · pods are drawn when a round opens · all bids validated
+          Rounds run one at a time in order · pods are prepared at event start · all bids validated
           and recorded server-side
         </p>
       </div>

@@ -9,11 +9,12 @@
  */
 
 import { prisma } from "@/lib/prisma";
-import { auctionTiles, capsuleOrder } from "@/lib/auction-catalog.mjs";
+import { auctionTiles } from "@/lib/auction-catalog.mjs";
 import {
   getBiddingContext,
   liveCapsule,
   resetEvent,
+  startEvent,
   startCapsule,
 } from "@/lib/auction-engine.mjs";
 
@@ -110,13 +111,26 @@ const capsuleShell = (): CapsuleContext[] =>
     podKind: null,
   }));
 
-type Hub = { onCapsuleStarted?: (id: string) => Promise<void> };
+type Hub = {
+  onCapsuleStarted?: (id: string) => Promise<void>;
+  announceCapsuleStarted?: (id: string) => Promise<void>;
+  onEventReset?: () => void;
+};
 
 async function notifyHub(capsuleId: string) {
   const hub = (globalThis as { __hackgridAuctionHub?: Hub }).__hackgridAuctionHub;
+  if (hub?.announceCapsuleStarted) {
+    await hub.announceCapsuleStarted(capsuleId).catch(() => undefined);
+    return;
+  }
   if (hub?.onCapsuleStarted) {
     await hub.onCapsuleStarted(capsuleId).catch(() => undefined);
   }
+}
+
+function notifyReset() {
+  const hub = (globalThis as { __hackgridAuctionHub?: Hub }).__hackgridAuctionHub;
+  hub?.onEventReset?.();
 }
 
 export async function getBiddingContextAction(teamIdOrEmail: string): Promise<BiddingContext> {
@@ -147,30 +161,16 @@ export async function getBiddingContextAction(teamIdOrEmail: string): Promise<Bi
   }
 }
 
-/**
- * Open the first round. From here the event runs itself: each capsule opens the
- * next when its last lot settles, so pods are only ever drawn for the round
- * about to be played.
- */
+/** Prepare every round and freeze pod assignments for the full event. */
 export async function startEventAction(): Promise<StartReport> {
   if (!isDev()) {
     return { status: "error", message: "Starting the event is an organiser control." };
   }
 
   try {
-    const already = await liveCapsule(prisma);
-    if (already) {
-      return { status: "error", message: `${already.name} is already live.` };
-    }
-
-    const report = await startCapsule(prisma, capsuleOrder[0]);
+    const report = await startEvent(prisma);
     if (report.status !== "success") return { status: "error", message: report.message };
-
-    await notifyHub(report.capsuleId);
-    return {
-      status: "success",
-      message: `${report.message} Later rounds open automatically as each one finishes.`,
-    };
+    return { status: "success", message: report.message };
   } catch (error) {
     console.error("startEventAction failed:", error);
     return { status: "error", message: "Could not start the event." };
@@ -202,6 +202,7 @@ export async function resetEventAction(): Promise<StartReport> {
 
   try {
     const { removed } = await resetEvent(prisma);
+    notifyReset();
     return {
       status: "success",
       message: `Removed ${removed} pod(s) with their lots, bids and settlements. Every capsule is back to pending.`,

@@ -1,6 +1,5 @@
 import type { PrismaClient } from "@prisma/client";
 
-/** The engine is plain JS; it works through whichever client it is handed. */
 type AnyPrisma = PrismaClient;
 
 export const EVENT_KEY: string;
@@ -28,6 +27,14 @@ export type StartCapsuleResult =
       hasRemainderPod: boolean;
     };
 
+export type StartEventResult =
+  | { status: "error"; message: string }
+  | { status: "success"; message: string };
+
+export type ResetCapsuleResult =
+  | { status: "error"; message: string }
+  | { status: "success"; message: string; capsuleId: string };
+
 export function ensureEvent(prisma: AnyPrisma): Promise<{ id: string; key: string }>;
 
 export function ensureCapsule(
@@ -35,6 +42,8 @@ export function ensureCapsule(
   eventId: string,
   capsuleKey: string,
 ): Promise<unknown>;
+
+export function startEvent(prisma: AnyPrisma): Promise<StartEventResult>;
 
 export function startCapsule(
   prisma: AnyPrisma,
@@ -47,7 +56,6 @@ export function openRemainderPod(
   capsuleId: string,
 ): Promise<{
   podId: string;
-  closesAt: Date;
   lotIds: string[];
   prices: { subCapsuleId: string; avgPrice: number; podsCounted: number; source: string }[];
 } | null>;
@@ -97,10 +105,67 @@ export type BiddingContextResult = {
       sequenceOrder: number;
       tierName: string;
       pricePaid: number;
-      priceSource: "COMPETITIVE" | "AUTO_ASSIGNED" | "NO_BIDS_ASSIGNED" | "POD_AVERAGE" | "STARTING_BID_FALLBACK";
+      priceSource:
+        | "COMPETITIVE"
+        | "AUTO_ASSIGNED"
+        | "NO_BIDS_ASSIGNED"
+        | "POD_AVERAGE"
+        | "STARTING_BID_FALLBACK";
       settledAt: string;
     }[];
   } | null;
+};
+
+export type AdminContextResult = {
+  teamCount: number;
+  event: {
+    startingBudget: number;
+    preparedCapsules: number;
+    completedCapsules: number;
+    liveCapsuleKey: string | null;
+    liveCapsuleName: string | null;
+    isPrepared: boolean;
+  };
+  capsules: Array<{
+    key: string;
+    name: string;
+    status: "PENDING" | "LIVE" | "CLOSED";
+    sequenceOrder: number;
+    podCount: number;
+    memberCount: number;
+    settlementCount: number;
+    pods: Array<{
+      label: string;
+      kind: "MAIN" | "REMAINDER";
+      auctionStatus: "PENDING" | "WAITING_FOR_TEAMS" | "LIVE" | "COMPLETE";
+      activeItemName: string | null;
+      settledLots: number;
+      lotCount: number;
+      teams: Array<{
+        id: number;
+        name: string;
+        code: string;
+        seat: number;
+        item: {
+          name: string;
+          tierRank: number;
+          pricePaid: number;
+          priceSource:
+            | "COMPETITIVE"
+            | "AUTO_ASSIGNED"
+            | "NO_BIDS_ASSIGNED"
+            | "POD_AVERAGE"
+            | "STARTING_BID_FALLBACK";
+        } | null;
+      }>;
+    }>;
+    subCapsules: Array<{
+      key: string;
+      name: string;
+      tierRank: number;
+      isAutoAssigned: boolean;
+    }>;
+  }>;
 };
 
 export function getBiddingContext(
@@ -108,7 +173,20 @@ export function getBiddingContext(
   teamIdOrEmail: string,
 ): Promise<BiddingContextResult>;
 
+export function getAdminEventContext(prisma: AnyPrisma): Promise<AdminContextResult>;
+
 export function resetEvent(prisma: AnyPrisma): Promise<{ removed: number }>;
+
+export function resetCapsule(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+): Promise<ResetCapsuleResult>;
+
+export function resetSubCapsule(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+  subCapsuleKey: string,
+): Promise<ResetCapsuleResult>;
 
 export function liveCapsule(
   prisma: AnyPrisma,
