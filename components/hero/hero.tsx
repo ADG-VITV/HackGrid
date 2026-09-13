@@ -171,8 +171,10 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
 
 function CountdownClock() {
   const [time, setTime] = useState<TimeLeft>(getTimeLeft());
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     setTime(getTimeLeft());
     const interval = setInterval(() => {
       setTime(getTimeLeft());
