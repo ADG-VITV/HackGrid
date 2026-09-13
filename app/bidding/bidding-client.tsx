@@ -199,7 +199,7 @@ export function BiddingClient() {
       return eventComplete
         ? "Every round is finished. Your final product spec is in the Resource Manager."
         : IS_DEV
-          ? "No round is live. Hit Start event to draw pods for the Track Auction; each later round opens itself when the one before it finishes."
+          ? "No round is live. Hit Start event to prepare every round, then open a prepared round from admin or with the force control here."
           : "The auction has not started yet. This page will come alive when the first round opens.";
     }
     if (!liveCapsule.podId) {
@@ -244,7 +244,7 @@ export function BiddingClient() {
               Reset event
             </button>
             <span className="text-[0.62rem] text-zinc-600">
-              One press runs all {auctionTiles.length} rounds in order; each opens the next when it settles.
+              Prepares all {auctionTiles.length} rounds and locks in their pods. Use Force to open a round in development.
             </span>
           </div>
         ) : null}
@@ -409,7 +409,7 @@ export function BiddingClient() {
         </section>
 
         <p className="pb-2 text-center text-[0.62rem] text-zinc-700">
-          Rounds run one at a time in order · pods are drawn when a round opens · all bids validated
+          Rounds run one at a time in order · pods are prepared at event start · all bids validated
           and recorded server-side
         </p>
       </div>
