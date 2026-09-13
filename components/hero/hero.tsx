@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 
 const COUNTDOWN_TARGET = new Date("2026-09-16T08:00:00");
@@ -30,8 +30,8 @@ type TimeLeft = {
   seconds: number;
 };
 
-function getTimeLeft(): TimeLeft {
-  const diff = Math.max(0, COUNTDOWN_TARGET.getTime() - Date.now());
+function getTimeLeft(nowMs: number): TimeLeft {
+  const diff = Math.max(0, COUNTDOWN_TARGET.getTime() - nowMs);
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
@@ -166,22 +166,23 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
 
 const ZERO_TIME: TimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
 
+/* Wall clock as an external store, ticking once a second. Snapshot is the
+   current second (a primitive) so identical values don't re-render. The
+   server snapshot is null: server and client then render identical HTML
+   and the real time only appears after hydration. */
+function subscribeEverySecond(onTick: () => void) {
+  const id = setInterval(onTick, 1000);
+  return () => clearInterval(id);
+}
+const getNowSeconds = () => Math.floor(Date.now() / 1000);
+const getServerNow = () => null;
+
 function CountdownClock() {
-  /* Start as null so server and client render identical HTML; the real
-     time (which depends on Date.now()) is only computed after hydration.
-     Keying the digit row on readiness remounts the DigitCards with their
+  const nowSeconds = useSyncExternalStore(subscribeEverySecond, getNowSeconds, getServerNow);
+  const time = nowSeconds === null ? null : getTimeLeft(nowSeconds * 1000);
+
+  /* Keying the digit row on readiness remounts the DigitCards with their
      real value instead of flip-animating from the 00 placeholder. */
-  const [time, setTime] = useState<TimeLeft | null>(null);
-
-  useEffect(() => {
-    setTime(getTimeLeft());
-    const interval = setInterval(() => {
-      setTime(getTimeLeft());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
   const shown = time ?? ZERO_TIME;
 
   return (

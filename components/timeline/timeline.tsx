@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useSyncExternalStore } from "react";
 import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { Space_Grotesk, JetBrains_Mono, Geist_Mono } from "next/font/google";
@@ -21,7 +21,9 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   variable: "--font-geist-mono",
-}); 
+});
+
+const noopSubscribe = () => () => {};
 
 interface BaseNode {
   x: number;
@@ -62,7 +64,9 @@ const eventsData = [
 ];
 
 export default function HackGridTimeline() {
-  const [isMounted, setIsMounted] = useState(false);
+  /* false during SSR/hydration, true once on the client — without a
+     setState-in-effect. */
+  const isMounted = useSyncExternalStore(noopSubscribe, () => true, () => false);
   const containerRef = useRef<HTMLDivElement>(null);
   const oldSegmentRef = useRef<SVGPathElement>(null);
   const prevSegmentRef = useRef<SVGPathElement>(null);
@@ -72,10 +76,6 @@ export default function HackGridTimeline() {
   const clockHourRef = useRef<SVGGElement>(null);
   const clockMinRef = useRef<SVGGElement>(null);
   const clockDigitalSvgRef = useRef<SVGTextElement>(null);
-
-  useEffect(() => {
-    setIsMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!isMounted) return;
@@ -130,8 +130,8 @@ export default function HackGridTimeline() {
 
     nodeInstances.forEach((node, index) => {
       // Adjusted hardcoded index from 8 to 9 for the terminal node
-      let nx = index === 9 ? 400 : parseFloat(node.getAttribute("x") || "400");
-      let ny = index === 9 ? 400 : parseFloat(node.getAttribute("y") || "400");
+      const nx = index === 9 ? 400 : parseFloat(node.getAttribute("x") || "400");
+      const ny = index === 9 ? 400 : parseFloat(node.getAttribute("y") || "400");
 
       let minDst = Infinity;
       let closestLen = currentSearchStart;
@@ -153,12 +153,12 @@ export default function HackGridTimeline() {
 
     function formatTime(totalMinutes: number) {
       let h = Math.floor(totalMinutes / 60) % 24;
-      let m = Math.floor(totalMinutes % 60);
-      let ampm = h >= 12 && h < 24 ? "PM" : "AM";
+      const m = Math.floor(totalMinutes % 60);
+      const ampm = h >= 12 && h < 24 ? "PM" : "AM";
       if (h === 0 || h === 24) h = 12;
       else if (h > 12) h -= 12;
-      let hh = h < 10 ? "0" + h : h;
-      let mm = m < 10 ? "0" + m : m;
+      const hh = h < 10 ? "0" + h : h;
+      const mm = m < 10 ? "0" + m : m;
       return `${hh}:${mm} ${ampm}`;
     }
 
@@ -311,10 +311,10 @@ export default function HackGridTimeline() {
           const node = nodeInstances[index];
           if (!node) return;
           // Adjusted hardcoded index from 8 to 9
-          let nx = index === 9 ? 400 : parseFloat(node.getAttribute("x") || "400");
-          let ny = index === 9 ? 400 : parseFloat(node.getAttribute("y") || "400");
+          const nx = index === 9 ? 400 : parseFloat(node.getAttribute("x") || "400");
+          const ny = index === 9 ? 400 : parseFloat(node.getAttribute("y") || "400");
 
-          let distToBlob = Math.hypot(currentPoint.x - nx, currentPoint.y - ny);
+          const distToBlob = Math.hypot(currentPoint.x - nx, currentPoint.y - ny);
 
           if (index === lastNodeIndex + 1) node.style.opacity = "1";
           else if (index === lastNodeIndex) node.style.opacity = "1";
