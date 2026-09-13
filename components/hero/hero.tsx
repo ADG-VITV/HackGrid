@@ -164,10 +164,17 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
+const ZERO_TIME: TimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+
 function CountdownClock() {
-  const [time, setTime] = useState<TimeLeft>(getTimeLeft());
+  /* Start as null so server and client render identical HTML; the real
+     time (which depends on Date.now()) is only computed after hydration.
+     Keying the digit row on readiness remounts the DigitCards with their
+     real value instead of flip-animating from the 00 placeholder. */
+  const [time, setTime] = useState<TimeLeft | null>(null);
 
   useEffect(() => {
+    setTime(getTimeLeft());
     const interval = setInterval(() => {
       setTime(getTimeLeft());
     }, 1000);
@@ -175,20 +182,27 @@ function CountdownClock() {
     return () => clearInterval(interval);
   }, []);
 
+  const shown = time ?? ZERO_TIME;
+
   return (
     <div
       style={{
         transform: `translate(${CLOCK_OFFSET_X}px, ${CLOCK_OFFSET_Y}px) scale(${CLOCK_SCALE})`,
       }}
     >
-      <div className="relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3">
-        <FlipUnit value={time.days} label="Days" />
+      <div
+        key={time ? "live" : "placeholder"}
+        className={`relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3 ${
+          time ? "" : "invisible"
+        }`}
+      >
+        <FlipUnit value={shown.days} label="Days" />
         <FlipSeparator />
-        <FlipUnit value={time.hours} label="Hours" />
+        <FlipUnit value={shown.hours} label="Hours" />
         <FlipSeparator />
-        <FlipUnit value={time.minutes} label="Minutes" />
+        <FlipUnit value={shown.minutes} label="Minutes" />
         <FlipSeparator />
-        <FlipUnit value={time.seconds} label="Seconds" />
+        <FlipUnit value={shown.seconds} label="Seconds" />
       </div>
     </div>
   );
