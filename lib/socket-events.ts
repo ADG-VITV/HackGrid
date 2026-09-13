@@ -35,7 +35,7 @@ export type LotView = {
     teamId: number;
     teamName: string;
     pricePaid: number;
-    priceSource: "COMPETITIVE" | "AUTO_ASSIGNED" | "POD_AVERAGE" | "STARTING_BID_FALLBACK";
+    priceSource: "COMPETITIVE" | "AUTO_ASSIGNED" | "NO_BIDS_ASSIGNED" | "POD_AVERAGE" | "STARTING_BID_FALLBACK";
   } | null;
 };
 

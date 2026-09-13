@@ -76,6 +76,14 @@ export function ExpandedWorkspace({
     ? (room.lots.find((lot) => lot.id === room.you.wonLotId) ?? null)
     : null;
 
+  // The remainder pod only opens once every main pod has finished — it is
+  // event-driven, not timed. Until then every one of its lots is still PENDING.
+  const remainderWaiting =
+    room.pod.kind === "REMAINDER" &&
+    !activeLot &&
+    !yourResult &&
+    room.lots.some((lot) => lot.status === "PENDING");
+
   const youHoldTop = activeLot?.top?.teamId === room.you.teamId;
   const secondsLeft = secondsUntil(activeLot?.closesAt ?? null, clockSkew);
   const urgent = secondsLeft !== null && secondsLeft <= 10;
@@ -110,7 +118,13 @@ export function ExpandedWorkspace({
             <circle cx="12" cy="12" r="10" />
             <polyline points="12 6 12 12 16 14" />
           </svg>
-          {!activeLot ? "CLOSED" : activeLot.awaitingQuorum ? "ON HOLD" : formatTimer(secondsLeft)}
+          {remainderWaiting
+            ? "WAITING"
+            : !activeLot
+              ? "CLOSED"
+              : activeLot.awaitingQuorum
+                ? "ON HOLD"
+                : formatTimer(secondsLeft)}
         </div>
       }
     >
@@ -240,6 +254,8 @@ export function ExpandedWorkspace({
             </>
           ) : yourResult ? (
             <YourOutcome lot={yourResult} podLabel={room.pod.label} />
+          ) : remainderWaiting ? (
+            <RemainderWaiting room={room} />
           ) : (
             <div className="flex flex-1 items-center justify-center text-center">
               <p className="text-sm text-zinc-500">
@@ -294,6 +310,51 @@ export function ExpandedWorkspace({
   );
 }
 
+/**
+ * What a remainder-pod team sees while the main pods are still bidding.
+ * Their round starts when the last main pod settles — not on a clock — so
+ * there is nothing to count down here.
+ */
+function RemainderWaiting({ room }: { room: RoomState }) {
+  return (
+    <div className="flex flex-1 flex-col justify-center">
+      <p className="text-[0.65rem] font-semibold tracking-[0.18em] text-amber-400 uppercase">
+        {room.pod.label} · {room.members.length} team{room.members.length === 1 ? "" : "s"}
+      </p>
+      <h4 className="mt-3 text-2xl font-semibold text-white lg:text-3xl">
+        Your turn comes after the main pods finish.
+      </h4>
+
+      <div className="mt-5 max-w-md rounded-xl border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        <strong className="font-semibold">The main pods are bidding right now.</strong>
+        <span className="mt-1 block text-zinc-300">
+          When the last of them settles, every tier opens for you at once at a fixed price — the
+          average each tier sold for across the main pods. You then pick the one you want; you don&apos;t
+          bid the price up.
+        </span>
+      </div>
+
+      <ul className="mt-5 max-w-md space-y-1.5 text-xs text-zinc-500">
+        <li>· There is no clock for you until then — it is not tied to how long the main pods take.</li>
+        <li>· Only if two of you want the same tier does a short bid decide who gets it. The price stays fixed.</li>
+        <li>· Keep this page open; it will change on its own the moment your pod opens.</li>
+      </ul>
+
+      <p className="mt-4 text-[0.65rem] tracking-[0.14em] text-zinc-600 uppercase">
+        Tiers you will be able to pick from
+      </p>
+      <ul className="mt-2 max-w-md space-y-1">
+        {room.lots.map((lot) => (
+          <li key={lot.id} className="flex items-baseline justify-between gap-3 text-xs">
+            <span className="min-w-0 truncate text-zinc-300">{lot.name}</span>
+            <span className="shrink-0 font-mono text-zinc-600">list {formatCredits(lot.listedPrice)}</span>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** How a team ended up with the tier it owns, in the words of the rulebook. */
 const outcomeCopy: Record<string, { headline: string; detail: string }> = {
   COMPETITIVE: {
@@ -304,6 +365,11 @@ const outcomeCopy: Record<string, { headline: string; detail: string }> = {
     headline: "This tier was assigned to you.",
     detail:
       "You were the last team left in the pod, so it went to you at its listed price with no bidding — you never needed to place a bid.",
+  },
+  NO_BIDS_ASSIGNED: {
+    headline: "This tier was assigned to you.",
+    detail:
+      "Nobody in the pod bid on it in the whole window, so it went to a team still without a tier — at the price it opened at.",
   },
   POD_AVERAGE: {
     headline: "You claimed this tier.",
