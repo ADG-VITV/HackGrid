@@ -177,7 +177,7 @@ export default function Placeholder() {
       {/* Animated bulge-grid background — fixed to the viewport so its
           canvas (drawn at window size) isn't stretched across the full,
           much-taller scroll height of this page. */}
-      <div className="fixed inset-0 z-0 h-screen w-screen">
+      <div className="fixed inset-0 z-0 h-screen w-screen bg-[#030704]">
         <BulgeGrid />
       </div>
 

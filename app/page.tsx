@@ -8,13 +8,17 @@ import Footer from "@/components/footer1";
 export default function Home() {
   return (
     <>
-      <section className="relative h-screen w-full overflow-hidden bg-transparent cursor-none">
+      {/* Animated bulge-grid background — fixed to the viewport so it sits
+          behind every transparent section (hero + timeline), not just the hero.
+          BulgeGrid itself is `absolute` so the footer can embed its own copy. */}
+      <div className="fixed inset-0 z-0 h-screen w-screen bg-[#030704]">
         <BulgeGrid />
+      </div>
+
+      <section className="relative h-screen w-full overflow-hidden bg-transparent cursor-none">
         <Hero />
-        
       </section>
       <HackGridTimeline />
-      
 
       <ADG_details />
       <HackDetails />
