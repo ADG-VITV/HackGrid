@@ -166,14 +166,36 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
 
 function CountdownClock() {
   const [time, setTime] = useState<TimeLeft>(getTimeLeft());
+  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
+    setIsMounted(true);
     const interval = setInterval(() => {
       setTime(getTimeLeft());
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
+
+  if (!isMounted) {
+    return (
+      <div
+        style={{
+          transform: `translate(${CLOCK_OFFSET_X}px, ${CLOCK_OFFSET_Y}px) scale(${CLOCK_SCALE})`,
+        }}
+      >
+        <div className="relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3 opacity-0">
+          <FlipUnit value={0} label="Days" />
+          <FlipSeparator />
+          <FlipUnit value={0} label="Hours" />
+          <FlipSeparator />
+          <FlipUnit value={0} label="Minutes" />
+          <FlipSeparator />
+          <FlipUnit value={0} label="Seconds" />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
