@@ -26,6 +26,7 @@ interface BaseNode {
   y: number;
 }
 
+// Added a new node at {x: 550, y: 320} for card-8 so card-9 can be the center terminal
 const baseNodes: BaseNode[] = [
   { x: 100, y: 150 },
   { x: 400, y: 120 },
@@ -35,22 +36,27 @@ const baseNodes: BaseNode[] = [
   { x: 200, y: 600 },
   { x: 120, y: 350 },
   { x: 330, y: 250 },
+  { x: 550, y: 320 }, 
   { x: 400, y: 400 },
 ];
 
-const nodeTimes = [480, 660, 870, 1140, 1410, 1800, 1980, 2310, 2385];
+// Synced times to elapsed minutes: 
+// 08:00 AM (480), 11:00 AM (660), 02:30 PM (870), 07:00 PM (1140), 12:00 AM (1440),
+// 04:00 AM (1680), 05:30 AM (1770), 12:30 PM (2190), 02:30 PM (2310), 03:45 PM (2385)
+const nodeTimes = [480, 660, 870, 1140, 1440, 1680, 1770, 2190, 2310, 2385];
 const cipherLetters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789@#$%&*";
 
 const eventsData = [
-  { id: "card-0", time: "08:00 AM", seq: "SEQ_01", title: "System Initialization", desc: "Registration and team settlement. Opening sequence and Board Members' speech.", style: { left: "100px", top: "150px" }, push: "push-down" },
-  { id: "card-1", time: "11:00 AM", seq: "SEQ_02", title: "Sustenance Break", desc: "Lunch break. Disconnect from terminals and refuel core systems.", style: { left: "400px", top: "120px" }, push: "push-down" },
-  { id: "card-2", time: "02:30 PM", seq: "SEQ_03", title: "Review Sequence 1", desc: "Mentors begin first pass. Teams present initial logic flows and blueprints.", style: { left: "700px", top: "250px" }, push: "push-left" },
-  { id: "card-3", time: "07:00 PM", seq: "SEQ_04", title: "Evening Rations", desc: "Dinner served. A brief window to network and debug with peers.", style: { left: "680px", top: "500px" }, push: "push-left" },
-  { id: "card-4", time: "11:30 PM", seq: "SEQ_05", title: "Review Sequence 2", desc: "Late-night inspection. Backend integration checks before midnight freeze.", style: { left: "450px", top: "700px" }, push: "push-up" },
-  { id: "card-5", time: "06:00 AM", seq: "SEQ_06", title: "Day 1 Concludes", desc: "Morning break. Cycle down operations, grab caffeine, push commits.", style: { left: "200px", top: "600px" }, push: "push-right" },
-  { id: "card-6", time: "09:00 AM", seq: "SEQ_07", title: "Sprint Resumes", desc: "Final stretch initiated. Compile remaining assets and demo builds.", style: { left: "120px", top: "350px" }, push: "push-right" },
-  { id: "card-7", time: "02:30 PM", seq: "SEQ_08", title: "Final Judgement", desc: "Terminal freeze. Teams deliver final presentations to the executive panel.", style: { left: "330px", top: "250px" }, push: "push-left" },
-  { id: "card-8", time: "03:45 PM", seq: "SEQ_09", title: "System Shutdown", desc: "Final speech. Winners are announced and the hackathon officially concludes.", style: { left: "400px", top: "400px" }, push: "push-center" },
+  { id: "card-0", time: "08:00 AM", seq: "SEQ_01", title: "Kickoff & Welcome", desc: "Registration, check-in, and opening remarks from our anchors and board members. Let the hackathon begin!", style: { left: "100px", top: "150px" }, push: "push-down" },
+  { id: "card-1", time: "11:00 AM", seq: "SEQ_02", title: "Lunch Break", desc: "A midday pause on Day 1 before the final stretch begins.", style: { left: "400px", top: "120px" }, push: "push-down" },
+  { id: "card-2", time: "02:30 PM", seq: "SEQ_03", title: "Review Sequence 1", desc: "Teams present their initial problem approach and solution strategy to mentors.", style: { left: "700px", top: "250px" }, push: "push-left" },
+  { id: "card-3", time: "07:00 PM", seq: "SEQ_04", title: "Dinner Break", desc: "Time to unwind, eat, and get ready for the night of building ahead.", style: { left: "680px", top: "500px" }, push: "push-left" },
+  { id: "card-4", time: "12:00 AM", seq: "SEQ_05", title: "Review Sequence 2", desc: "A deeper look into each team's progress, prototypes, and problem-solving direction.", style: { left: "450px", top: "700px" }, push: "push-up" },
+  { id: "card-5", time: "04:00 AM", seq: "SEQ_06", title: "Review & Shortlisting", desc: "Final evaluation round of Day 1 to shortlist teams advancing to Day 2.", style: { left: "200px", top: "600px" }, push: "push-right" },
+  { id: "card-6", time: "05:30 AM", seq: "SEQ_07", title: "Day 1 Wrap-Up", desc: "Day 1 concludes. Teams get a well-deserved break to rest and recharge overnight.", style: { left: "120px", top: "350px" }, push: "push-right" },
+  { id: "card-7", time: "12:30 PM", seq: "SEQ_08", title: "Refuel Break", desc: "A short lunch break to recharge before diving into the first round of building.", style: { left: "330px", top: "250px" }, push: "push-left" },
+  { id: "card-8", time: "02:30 PM", seq: "SEQ_09", title: "Final Showdown", desc: "Shortlisted teams present their final solutions for judgement by the panel.", style: { left: "550px", top: "320px" }, push: "push-left" },
+  { id: "card-9", time: "03:45 PM", seq: "SEQ_10", title: "Grand Finale", desc: "Closing speech, winner announcement, and closing ceremony to wrap up the hackathon.", style: { left: "400px", top: "400px" }, push: "push-center" },
 ];
 
 export default function HackGridTimeline() {
@@ -121,8 +127,9 @@ export default function HackGridTimeline() {
     let currentSearchStart = 0;
 
     nodeInstances.forEach((node, index) => {
-      let nx = index === 8 ? 400 : parseFloat(node.getAttribute("x") || "400");
-      let ny = index === 8 ? 400 : parseFloat(node.getAttribute("y") || "400");
+      // Adjusted hardcoded index from 8 to 9 for the terminal node
+      let nx = index === 9 ? 400 : parseFloat(node.getAttribute("x") || "400");
+      let ny = index === 9 ? 400 : parseFloat(node.getAttribute("y") || "400");
 
       let minDst = Infinity;
       let closestLen = currentSearchStart;
@@ -288,7 +295,8 @@ export default function HackGridTimeline() {
           if (activeIndex !== -1) {
             const nodeX = nodeInstances[activeIndex]?.getAttribute("x") || 400;
             const nodeY = nodeInstances[activeIndex]?.getAttribute("y") || 400;
-            if (activeIndex !== 8) dataPacket.setAttribute("transform", `translate(${nodeX}, ${nodeY}) rotate(${angle})`);
+            // Adjusted hardcoded index from 8 to 9
+            if (activeIndex !== 9) dataPacket.setAttribute("transform", `translate(${nodeX}, ${nodeY}) rotate(${angle})`);
           } else {
             dataPacket.setAttribute("transform", `translate(${currentPoint.x}, ${currentPoint.y}) rotate(${angle})`);
           }
@@ -300,8 +308,9 @@ export default function HackGridTimeline() {
         eventBlocks.forEach((block, index) => {
           const node = nodeInstances[index];
           if (!node) return;
-          let nx = index === 8 ? 400 : parseFloat(node.getAttribute("x") || "400");
-          let ny = index === 8 ? 400 : parseFloat(node.getAttribute("y") || "400");
+          // Adjusted hardcoded index from 8 to 9
+          let nx = index === 9 ? 400 : parseFloat(node.getAttribute("x") || "400");
+          let ny = index === 9 ? 400 : parseFloat(node.getAttribute("y") || "400");
 
           let distToBlob = Math.hypot(currentPoint.x - nx, currentPoint.y - ny);
 
@@ -544,8 +553,10 @@ export default function HackGridTimeline() {
             <use href="#advanced-nodule" x="200" y="600" className="node-instance" id="node-5" />
             <use href="#advanced-nodule" x="120" y="350" className="node-instance" id="node-6" />
             <use href="#advanced-nodule" x="330" y="250" className="node-instance" id="node-7" />
+            <use href="#advanced-nodule" x="550" y="320" className="node-instance" id="node-8" />
 
-            <g className="node-instance" id="node-8" transform="translate(400, 400)">
+            {/* Changed from node-8 to node-9 */}
+            <g className="node-instance" id="node-9" transform="translate(400, 400)">
               <path
                 className="nodule-crosshair"
                 d="
