@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "node server.mjs",
+    "dev": "node --watch-path=server.mjs --watch-path=lib --watch-preserve-output server.mjs",
     "build": "next build",
     "lint": "eslint",
     "prisma:generate": "prisma generate",

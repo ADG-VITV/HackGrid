@@ -15,4 +15,5 @@ export const auctionTiles: AuctionTile[];
 export const capsuleOrder: string[];
 export function findTile(id: string): AuctionTile | null;
 export function sequenceOf(capsuleKey: string): number | null;
+export function reserveAfter(capsuleKey: string): number;
 export function nextCapsuleKey(capsuleKey: string): string | null;

@@ -73,6 +73,19 @@ export function ResourceManager({
         <p className="mt-1.5 font-mono text-[0.6rem] text-zinc-600">
           {formatCredits(resources.spent)} of {formatCredits(resources.startingBudget)} spent
         </p>
+        <div className="mt-2 flex items-baseline justify-between rounded-lg border border-white/5 bg-black/30 px-2.5 py-1.5">
+          <span className="text-[0.58rem] tracking-[0.12em] text-zinc-500 uppercase">
+            Bid cap · {capsules.find((c) => c.key === resources.reserveCapsuleKey)?.name ?? "this round"}
+          </span>
+          <span className="font-mono text-sm font-semibold text-zinc-200">
+            {formatCredits(resources.spendingCap)}
+          </span>
+        </div>
+        <p className="mt-1 font-mono text-[0.56rem] text-zinc-600">
+          {resources.reserve > 0
+            ? `${formatCredits(resources.reserve)} held back to cover the capsules still to come`
+            : "last capsule — nothing held back"}
+        </p>
       </div>
 
       <ul className="mt-4 space-y-1.5">

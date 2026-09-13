@@ -88,7 +88,7 @@ export function ExpandedWorkspace({
   const secondsLeft = secondsUntil(activeLot?.closesAt ?? null, clockSkew);
   const urgent = secondsLeft !== null && secondsLeft <= 10;
   const increment = activeLot?.minIncrement ?? 0;
-  const canAfford = amount <= room.you.remainingBalance;
+  const canAfford = amount <= room.you.spendingCap;
   const alreadyWon = room.you.wonLotId !== null;
 
   const canBid =
@@ -203,6 +203,19 @@ export function ExpandedWorkspace({
                 </p>
               ) : null}
 
+              <p className="mt-3 font-mono text-[0.65rem] text-zinc-500">
+                Bid cap this round{" "}
+                <span className="font-semibold text-zinc-300">{formatCredits(room.you.spendingCap)}</span>
+                {room.you.reserve > 0 ? (
+                  <>
+                    {" "}· {formatCredits(room.you.reserve)} of your {formatCredits(room.you.remainingBalance)}{" "}
+                    is reserved for the capsules still to come
+                  </>
+                ) : (
+                  <> · last capsule, nothing held back</>
+                )}
+              </p>
+
               <div className="mt-6 flex items-center gap-3">
                 <button
                   type="button"
@@ -220,7 +233,7 @@ export function ExpandedWorkspace({
                   type="button"
                   aria-label="Increase bid"
                   onClick={() => setAmount(amount + (increment || 1))}
-                  disabled={amount + (increment || 1) > room.you.remainingBalance}
+                  disabled={amount + (increment || 1) > room.you.spendingCap}
                   className="grid size-10 place-items-center rounded-xl border border-neon/40 bg-neon/[0.08] text-neon transition hover:bg-neon/20 disabled:cursor-not-allowed disabled:opacity-30"
                 >
                   <PlusIcon />
@@ -244,7 +257,7 @@ export function ExpandedWorkspace({
                   : alreadyWon
                     ? "Already won this capsule"
                     : !canAfford
-                      ? "Over your remaining balance"
+                      ? "Over your bid cap for this round"
                       : `Bid ${formatCredits(amount)} credits`}
               </button>
               <p className="mt-2 text-[0.65rem] text-zinc-600">
@@ -409,7 +422,7 @@ function YourOutcome({ lot, podLabel }: { lot: LotView; podLabel: string }) {
       </div>
 
       <p className="mt-4 text-xs text-zinc-500">
-        You are done for this round. The next round opens once every pod has finished.
+        You are done for this round. The next capsule opens when the organiser starts it — you will be seated in a new pod.
       </p>
     </div>
   );
