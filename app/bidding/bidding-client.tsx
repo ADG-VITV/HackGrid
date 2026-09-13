@@ -5,9 +5,12 @@ import { ChevronIcon } from "./auction-icon";
 import { ExpandedWorkspace } from "./expanded-workspace";
 import { ActAsBar } from "./act-as-bar";
 import { DevConsole } from "./dev-console";
+import { MemberView } from "./member-view";
 import { ResourceManager } from "./resource-manager";
 import { SecondView } from "./second-view";
 import { auctionTiles } from "./auction-data";
+import { useLocalStorageValue, writeLocal } from "@/lib/use-local-storage";
+import { useViewerEmail } from "@/lib/use-viewer-email";
 import {
   getBiddingContextAction,
   listTeamsAction,
@@ -26,7 +29,11 @@ import {
 
 const IS_DEV = process.env.NODE_ENV === "development";
 const ACT_AS_KEY = "hackgrid:actAsTeamId";
-const EMAIL_KEYS = ["hackgrid:gmail", "hackgrid:userEmail", "email"];
+
+/** How often a member's watch view re-reads the database while a round is live. */
+const MEMBER_LIVE_POLL_MS = 4_000;
+/** Polling between rounds, for everyone who has no room to sit in. */
+const IDLE_POLL_MS = 10_000;
 
 function formatTimerDisplay(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -34,18 +41,12 @@ function formatTimerDisplay(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function readStoredEmail() {
-  for (const key of EMAIL_KEYS) {
-    const value = window.localStorage.getItem(key);
-    if (value && value.includes("@")) return value;
-  }
-  return "";
-}
-
 const emptyContext: BiddingContext = {
   status: "success",
   message: "",
   team: null,
+  viewerRole: null,
+  currentLot: null,
   resources: null,
   capsules: auctionTiles.map((tile, index) => ({
     key: tile.id,
@@ -62,8 +63,10 @@ const emptyContext: BiddingContext = {
 
 export function BiddingClient() {
   const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [context, setContext] = useState<BiddingContext>(emptyContext);
+  const [fetched, setFetched] = useState<{ identity: string; context: BiddingContext }>({
+    identity: "",
+    context: emptyContext,
+  });
   const [localLog, setLocalLog] = useState<ConsoleEntry[]>([]);
   const [expanded, setExpanded] = useState(true);
   const [pending, startTransition] = useTransition();
@@ -92,44 +95,39 @@ export function BiddingClient() {
     refreshTeams();
   }, [refreshTeams]);
 
-  useEffect(() => {
-    let cancelled = false;
+  // In production the viewer is whoever signed in with Google; the server
+  // works out from that email whether they lead their team or merely belong
+  // to it. In development the picker can stand in for any team's lead.
+  const viewer = useViewerEmail();
+  /** Development only: the team id chosen in the "Acting as" picker. */
+  const storedActAs = useLocalStorageValue(ACT_AS_KEY);
+  const actAs = IS_DEV ? storedActAs : null;
 
-    async function resolveIdentity() {
-      const stored = IS_DEV ? window.localStorage.getItem(ACT_AS_KEY) : null;
-      if (stored) {
-        if (!cancelled) setTeamId(stored);
-        return;
-      }
-      const email = readStoredEmail();
-      if (!email) return;
-      const result = await getBiddingContextAction(email).catch(() => null);
-      if (!cancelled && result?.team) setTeamId(String(result.team.id));
-    }
+  const identity = actAs ?? (viewer.email || null);
 
-    void resolveIdentity();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const refreshContext = useCallback((id: string | null) => {
-    getBiddingContextAction(id ?? "")
-      .then(setContext)
+  const refreshContext = useCallback(() => {
+    if (!identity) return;
+    getBiddingContextAction(identity)
+      .then((context) => setFetched({ identity, context }))
       .catch(() => undefined);
-  }, []);
+  }, [identity]);
 
   useEffect(() => {
-    refreshContext(teamId);
-  }, [teamId, refreshContext]);
+    refreshContext();
+  }, [refreshContext]);
+
+  // A context fetched for one identity must not linger once it changes — a
+  // cleared picker, or a sign-out, drops straight back to the empty shell.
+  const context = identity && fetched.identity === identity ? fetched.context : emptyContext;
 
   function selectTeam(next: string) {
-    setTeamId(next || null);
-    if (IS_DEV) {
-      if (next) window.localStorage.setItem(ACT_AS_KEY, next);
-      else window.localStorage.removeItem(ACT_AS_KEY);
-    }
+    writeLocal(ACT_AS_KEY, next || null);
   }
+
+  const teamId = context.team ? String(context.team.id) : null;
+  // Only the lead bids (rulebook 8). A member gets the read-only view and
+  // never opens a socket — a second seat in the room would count for quorum.
+  const isMember = !actAs && context.viewerRole === "MEMBER";
 
   // ------------------------------------------------------------------ socket
 
@@ -137,10 +135,18 @@ export function BiddingClient() {
   // The server keeps exactly one capsule live; if it ever reports more, the
   // one furthest along the running order is the current round.
   const liveCapsule = context.capsules.findLast((capsule) => capsule.status === "LIVE") ?? null;
-  const activePodId = liveCapsule?.podId ?? null;
+  const activePodId = isMember ? null : (liveCapsule?.podId ?? null);
+
+  // The hub seats the lead's email only. Acting as a team in development
+  // means playing its lead, so that team's lead email goes in the handshake.
+  const socketEmail = isMember
+    ? null
+    : actAs
+      ? (context.team?.leadEmail ?? null)
+      : viewer.email || null;
 
   const { connection, state: room, entries, feedback, clockSkew, placeBid, clearEntries, lastEvent } =
-    useAuctionSocket(activePodId, teamId);
+    useAuctionSocket(activePodId, teamId, socketEmail);
 
   // A round ending, or the next one opening, changes which room this client
   // belongs to — so re-read the context whenever the server says so.
@@ -151,24 +157,27 @@ export function BiddingClient() {
       lastEvent.type === "CAPSULE_CLOSED" ||
       lastEvent.type === "EVENT_COMPLETE"
     ) {
-      refreshContext(teamId);
+      refreshContext();
       refreshTeams();
     }
-  }, [lastEvent, teamId, refreshContext, refreshTeams]);
+  }, [lastEvent, refreshContext, refreshTeams]);
 
   // Settlements land in the Resource Manager, so refresh it when a lot closes.
   useEffect(() => {
-    if (lastEvent?.type === "LOT_CLOSED") refreshContext(teamId);
-  }, [lastEvent, teamId, refreshContext]);
+    if (lastEvent?.type === "LOT_CLOSED") refreshContext();
+  }, [lastEvent, refreshContext]);
 
-  // Between rounds there is no room to be in, so no push can arrive — a team
-  // sitting on the page would never see the next round open. Poll gently, and
-  // only while disconnected; once the room is live the socket does the work.
+  // With no socket there is no push: between rounds nobody has a room, and a
+  // member never does. Poll instead — quickly while a member is following a
+  // live round, gently otherwise. Once a lead's room is open the socket does
+  // the work.
+  const isLive = Boolean(liveCapsule);
   useEffect(() => {
-    if (connection === "open") return;
-    const id = setInterval(() => refreshContext(teamId), 10_000);
+    if (!isMember && connection === "open") return;
+    const ms = isMember && isLive ? MEMBER_LIVE_POLL_MS : IDLE_POLL_MS;
+    const id = setInterval(refreshContext, ms);
     return () => clearInterval(id);
-  }, [connection, teamId, refreshContext]);
+  }, [isMember, isLive, connection, refreshContext]);
 
   const consoleEntries = useMemo(
     () => [...localLog, ...entries].sort((a, b) => a.at.localeCompare(b.at)),
@@ -181,12 +190,16 @@ export function BiddingClient() {
     startTransition(async () => {
       const report = await fn();
       pushLocal(report.status === "error" ? "error" : "success", `${label}: ${report.message}`);
-      refreshContext(teamId);
+      refreshContext();
       refreshTeams();
     });
   }
 
   // --------------------------------------------------------------------- ui
+
+  if (isMember) {
+    return <MemberView context={context} polling={isLive} />;
+  }
 
   const eventStarted = context.capsules.some((capsule) => capsule.status !== "PENDING");
   const eventComplete =
@@ -196,7 +209,11 @@ export function BiddingClient() {
   const secondsLeft = secondsUntil(activeLot?.closesAt ?? null, clockSkew);
 
   function workspaceMessage(): string | null {
-    if (!teamId) return "Pick a team above to join its pod room.";
+    if (!teamId) {
+      return IS_DEV
+        ? "Pick a team above to join its pod room."
+        : "Sign in with your team's email to join its pod room.";
+    }
     if (!liveCapsule) {
       return eventComplete
         ? "Every round is finished. Your final product spec is in the Resource Manager."
@@ -205,7 +222,7 @@ export function BiddingClient() {
           : "The auction has not started yet. This page will come alive when the first round opens.";
     }
     if (!liveCapsule.podId) {
-      return `${liveCapsule.name} is running, but your team was not seated in a pod for it.`;
+      return `${liveCapsule.name} is running, but your team was not placed in a pod for it.`;
     }
     return null;
   }
@@ -216,7 +233,7 @@ export function BiddingClient() {
         <ActAsBar
           isDev={IS_DEV}
           teams={teams}
-          activeTeamId={teamId}
+          activeTeamId={actAs}
           onSelectTeam={selectTeam}
           teamLabel={context.team ? `${context.team.name} · ${context.team.code}` : null}
           podLabel={room?.pod.label ?? liveCapsule?.podLabel ?? null}
@@ -394,7 +411,7 @@ export function BiddingClient() {
               resources={context.resources}
               capsules={context.capsules}
               identityHint={
-                teamId ? null : "Pick a team above to see what it owns."
+                teamId ? null : IS_DEV ? "Pick a team above to see what it owns." : "Sign in with your roster email to see what your team owns."
               }
             />
 

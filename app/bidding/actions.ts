@@ -63,10 +63,22 @@ export type TeamResources = {
   owned: OwnedResource[];
 };
 
+export type ViewerRole = "LEADER" | "MEMBER";
+
+export type CurrentLot = {
+  name: string;
+  tierRank: number;
+  closesAt: string | null;
+};
+
 export type BiddingContext = {
   status: "success" | "error";
   message: string;
-  team: { id: number; name: string; code: string; leadEmail: string } | null;
+  team: { id: number; name: string; code: string; leadName: string; leadEmail: string } | null;
+  /** Who asked: the lead bids, a member watches. Null without a team. */
+  viewerRole: ViewerRole | null;
+  /** The tier open in this team's pod right now — what the lead is bidding on. */
+  currentLot: CurrentLot | null;
   capsules: CapsuleContext[];
   resources: TeamResources | null;
 };
@@ -114,6 +126,8 @@ export async function getBiddingContextAction(teamIdOrEmail: string): Promise<Bi
         status: "error",
         message: "DATABASE_URL is not set.",
         team: null,
+        viewerRole: null,
+        currentLot: null,
         capsules: capsuleShell(),
         resources: null,
       };
@@ -125,6 +139,8 @@ export async function getBiddingContextAction(teamIdOrEmail: string): Promise<Bi
       status: "error",
       message: "Database request failed.",
       team: null,
+      viewerRole: null,
+      currentLot: null,
       capsules: capsuleShell(),
       resources: null,
     };

@@ -19,15 +19,23 @@ const sourceLabel: Record<string, string> = {
  *
  * Present in development and in production — this is the team's real ledger,
  * not a debugging aid.
+ *
+ * `revealLive` is the lead's view: a tier shows the moment it settles. Members
+ * see a round only once the lead has moved past it — the live capsule stays
+ * "in progress" and its cost is not yet counted.
  */
 export function ResourceManager({
   resources,
   capsules,
   identityHint,
+  revealLive = true,
+  showBidCap = true,
 }: {
   resources: TeamResources | null;
   capsules: CapsuleContext[];
   identityHint: string | null;
+  revealLive?: boolean;
+  showBidCap?: boolean;
 }) {
   if (!resources) {
     return (
@@ -40,10 +48,17 @@ export function ResourceManager({
     );
   }
 
-  const ownedByCapsule = new Map(resources.owned.map((row) => [row.capsuleKey, row]));
+  const statusByKey = new Map(capsules.map((capsule) => [capsule.key, capsule.status]));
+  const visibleOwned = revealLive
+    ? resources.owned
+    : resources.owned.filter((row) => statusByKey.get(row.capsuleKey) === "CLOSED");
+  const ownedByCapsule = new Map(visibleOwned.map((row) => [row.capsuleKey, row]));
+
+  const spent = visibleOwned.reduce((total, row) => total + row.pricePaid, 0);
+  const remaining = resources.startingBudget - spent;
   const spentPercent = Math.min(
     100,
-    Math.round((resources.spent / Math.max(1, resources.startingBudget)) * 100),
+    Math.round((spent / Math.max(1, resources.startingBudget)) * 100),
   );
 
   return (
@@ -61,36 +76,41 @@ export function ResourceManager({
         <div className="flex items-baseline justify-between">
           <span className="text-[0.6rem] tracking-[0.14em] text-zinc-500 uppercase">Coins left</span>
           <span className="font-mono text-xl font-semibold text-neon">
-            <Credits value={resources.remaining} />
+            <Credits value={remaining} />
           </span>
         </div>
         <div
           className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-zinc-800"
           role="img"
-          aria-label={`${resources.spent} of ${resources.startingBudget} credits spent`}
+          aria-label={`${spent} of ${resources.startingBudget} credits spent`}
         >
           <div className="h-full rounded-full bg-neon/70" style={{ width: `${spentPercent}%` }} />
         </div>
         <p className="mt-1.5 font-mono text-[0.6rem] text-zinc-600">
-          <Credits value={resources.spent} /> of {formatCredits(resources.startingBudget)} spent
+          <Credits value={spent} /> of {formatCredits(resources.startingBudget)} spent
         </p>
-        <div className="mt-2 flex items-baseline justify-between rounded-lg border border-white/5 bg-black/30 px-2.5 py-1.5">
-          <span className="text-[0.58rem] tracking-[0.12em] text-zinc-500 uppercase">
-            Bid cap · {capsules.find((c) => c.key === resources.reserveCapsuleKey)?.name ?? "this round"}
-          </span>
-          <span className="font-mono text-sm font-semibold text-zinc-200">
-            <Credits value={resources.spendingCap} />
-          </span>
-        </div>
-        <p className="mt-1 font-mono text-[0.56rem] text-zinc-600">
-          {resources.reserve > 0 ? (
-            <>
-              <Credits value={resources.reserve} /> held back to cover the capsules still to come
-            </>
-          ) : (
-            "last capsule — nothing held back"
-          )}
-        </p>
+
+        {showBidCap ? (
+          <>
+            <div className="mt-2 flex items-baseline justify-between rounded-lg border border-white/5 bg-black/30 px-2.5 py-1.5">
+              <span className="text-[0.58rem] tracking-[0.12em] text-zinc-500 uppercase">
+                Bid cap · {capsules.find((c) => c.key === resources.reserveCapsuleKey)?.name ?? "this round"}
+              </span>
+              <span className="font-mono text-sm font-semibold text-zinc-200">
+                <Credits value={resources.spendingCap} />
+              </span>
+            </div>
+            <p className="mt-1 font-mono text-[0.56rem] text-zinc-600">
+              {resources.reserve > 0 ? (
+                <>
+                  <Credits value={resources.reserve} /> held back to cover the capsules still to come
+                </>
+              ) : (
+                "last capsule — nothing held back"
+              )}
+            </p>
+          </>
+        ) : null}
       </div>
 
       <ul className="mt-4 space-y-1.5">
@@ -130,7 +150,9 @@ export function ResourceManager({
               ) : (
                 <p className="mt-0.5 text-xs text-zinc-600">
                   {capsule.status === "LIVE"
-                    ? "bidding now"
+                    ? revealLive
+                      ? "bidding now"
+                      : "in progress — revealed when the round closes"
                     : capsule.status === "CLOSED"
                       ? "round finished — nothing won"
                       : "not yet run"}
@@ -142,7 +164,9 @@ export function ResourceManager({
       </ul>
 
       <p className="mt-3 text-[0.58rem] leading-4 text-zinc-700">
-        Updates as each tier settles. Only the team lead can bid; every member can read this.
+        {revealLive
+          ? "Updates as each tier settles. Only the team lead can bid; every member can read this."
+          : "Updates when your lead finishes a round. Only the team lead bids; this is your team's ledger."}
       </p>
     </section>
   );

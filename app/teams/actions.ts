@@ -146,57 +146,6 @@ export async function getAuctionTeamForEmailAction(emailValue: string): Promise<
   }
 }
 
-/** Look up any team by a member's name and email. Used by the teams page. */
-export async function lookupTeamMemberAction(
-  _previousState: AuctionTeamState,
-  formData: FormData,
-): Promise<AuctionTeamState> {
-  try {
-    if (!process.env.DATABASE_URL) {
-      return databaseMissingState();
-    }
-
-    const name = field(formData, "lookupName");
-    const email = normalizeEmail(field(formData, "lookupEmail"));
-
-    if (!name) {
-      return validationError("Enter the person's name.");
-    }
-
-    if (!isEmail(email)) {
-      return validationError("Enter a valid email address.");
-    }
-
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    if (!user) {
-      return validationError("No person found with that email.");
-    }
-
-    if (user.name.trim().toLowerCase() !== name.toLowerCase()) {
-      return validationError("That name does not match the email on record.");
-    }
-
-    const team = await findTeamForEmail(email);
-
-    if (!team) {
-      return validationError("That person is not in a team yet.");
-    }
-
-    const view = toTeamView(team);
-    const viewer = view.members.find((member) => member.email === email);
-
-    return {
-      status: "success",
-      message: `Showing ${view.name} as ${viewer?.role === "LEADER" ? "the team lead" : "a member"}.`,
-      viewerRole: viewer?.role ?? "MEMBER",
-      team: view,
-    };
-  } catch (error) {
-    return databaseError(error);
-  }
-}
-
 async function createTeam(formData: FormData): Promise<AuctionTeamState> {
   if (!process.env.DATABASE_URL) {
     return databaseMissingState();

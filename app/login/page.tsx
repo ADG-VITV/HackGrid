@@ -25,7 +25,10 @@ export default function LoginPage() {
 
       await signInWithPopup(auth, provider);
 
-      router.push("/teams");
+      // Pages that need a session send people here with ?next=; only a
+      // same-site path is honoured so the parameter cannot bounce elsewhere.
+      const next = new URLSearchParams(window.location.search).get("next") ?? "";
+      router.push(next.startsWith("/") && !next.startsWith("//") ? next : "/teams");
     } catch (error) {
       console.error("Google login failed:", error);
       setError("Unable to sign in with Google. Please try again.");
