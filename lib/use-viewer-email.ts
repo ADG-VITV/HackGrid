@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useAuth } from "@/context/AuthContext";
 import { readLocal, useLocalStorageValue, writeLocal } from "./use-local-storage";
 
@@ -47,20 +47,20 @@ export function useViewerEmail() {
 }
 
 /**
- * Send a signed-out visitor to the login page. Waits for Firebase to settle
- * first so a returning user is not bounced while their session restores.
- * Development skips this so the remembered-email flows keep working.
+ * Send a signed-out visitor to the login page, which returns them to /teams
+ * once they sign in. Waits for Firebase to settle first so a returning user
+ * is not bounced while their session restores. Development skips this so the
+ * remembered-email flows keep working.
  */
 export function useRequireSignIn() {
   const { loading, signedIn } = useViewerEmail();
   const router = useRouter();
-  const pathname = usePathname();
 
   const redirecting = !IS_DEV && !loading && !signedIn;
 
   useEffect(() => {
-    if (redirecting) router.replace(`/login?next=${encodeURIComponent(pathname)}`);
-  }, [redirecting, router, pathname]);
+    if (redirecting) router.replace("/login");
+  }, [redirecting, router]);
 
   /** True while the session is still resolving or the redirect is on its way. */
   return { blocked: !IS_DEV && (loading || !signedIn) };

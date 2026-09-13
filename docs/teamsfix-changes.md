@@ -67,20 +67,12 @@ same visual language as the rest of the site.
 
 | File | Change | Why |
 |---|---|---|
-| `lib/use-viewer-email.ts` *(new)* | `useViewerEmail()` — the Google session's email in production; in development a remembered email may stand in. `useRequireSignIn()` — redirects a signed-out visitor to `/login?next=<path>` in production. | One definition of "who is this" for every page, and the production sign-in gate for `/teams`. |
+| `lib/use-viewer-email.ts` *(new)* | `useViewerEmail()` — the Google session's email in production; in development a remembered email may stand in. `useRequireSignIn()` — redirects a signed-out visitor to `/login` in production (the login page already returns to `/teams`). | One definition of "who is this" for every page, and the production sign-in gate for `/teams`. |
 | `lib/use-local-storage.ts` *(new)* | `localStorage` as a React external store (`useSyncExternalStore`). | Reads agree between server render and hydration, and writes notify every hook on the page. Replaces ad-hoc `localStorage.getItem` in effects, which the React lint rule flags. |
-| `lib/event-schedule.ts` *(new)* | `AUCTION_START_AT`, label, `countdownTo()`. | The auction start date was hard-coded in the old countdown screen; the member view reads it from here. |
-| `app/login/page.tsx` | After sign-in, returns to `?next=` if it is a same-site path, else `/teams`. | So the sign-in gate sends people back where they were going. |
-
-### Tooling
-
-| File | Change | Why |
-|---|---|---|
-| `.claude/launch.json` | Adds a `hackgrid-prod` configuration (`NODE_ENV=production`, port 3100). | The sign-in gate is production-only; this runs a built server locally to verify it. |
 
 ## How it behaves now
 
-- **Signed out (production):** `/teams` → `/login?next=/teams` → back to `/teams` after Google sign-in.
+- **Signed out (production):** `/teams` → `/login` → back to `/teams` after Google sign-in.
 - **No team yet:** Join / Create cards; the email field is the session's email and read-only.
 - **Lead:** team dashboard with **Start auction**; `/bidding` is the pod room. The socket is admitted only if the handshake email matches the pod membership's `leadEmail`.
 - **Member:** team dashboard with **Watch** and the ledger; `/bidding` is the watch view (current tier + ledger). No socket is ever opened; the page polls the database.

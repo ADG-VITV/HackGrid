@@ -5,7 +5,6 @@ import type { BiddingContext } from "./actions";
 import { ResourceManager } from "./resource-manager";
 import { secondsUntil } from "./use-auction-socket";
 import { Chip, CornerMarks, Eyebrow, Panel, ghostButton } from "@/components/ui/panel";
-import { AUCTION_START_LABEL } from "@/lib/event-schedule";
 
 function formatTimer(seconds: number | null) {
   if (seconds === null) return "—:—";
@@ -122,7 +121,7 @@ export function MemberView({ context, polling }: { context: BiddingContext; poll
                   <Eyebrow>Not started</Eyebrow>
                   <h2 className="mt-3 text-3xl font-semibold text-white">Round one opens soon.</h2>
                   <p className="mt-4 max-w-lg text-sm leading-6 text-zinc-500">
-                    {AUCTION_START_LABEL}. This page changes on its own the moment your lead is placed
+                    This page changes on its own the moment your lead is placed
                     in a pod.
                   </p>
                 </div>
