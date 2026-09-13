@@ -70,7 +70,6 @@ export default function Footer(): React.JSX.Element {
           
           {/* Status Capsule */}
           <div className="mb-8 flex items-center gap-2 rounded-full border border-[#42ff5a]/40 bg-black/80 px-4 py-1 backdrop-blur-md shadow-[0_0_14px_rgba(66,255,90,0.15)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[#42ff5a] animate-ping" />
             <span className="font-mono text-[10px] font-semibold tracking-[0.25em] text-[#42ff5a] uppercase">
               CONTACT POINTS
             </span>
@@ -146,7 +145,7 @@ export default function Footer(): React.JSX.Element {
               <IconX className="h-5 w-5" />
             </a>
             <a
-              href="mailto:contact@adgvit.com"
+              href="mailto:ios@vit.ac.in"
               aria-label="Email"
               className="text-neutral-400 transition-all duration-200 hover:-translate-y-0.5 hover:text-[#42ff5a]"
             >
@@ -168,14 +167,9 @@ export default function Footer(): React.JSX.Element {
             </svg>
             <span className="font-mono text-[10px] sm:text-[11px] font-semibold tracking-[0.3em] text-[#86efac]/90 uppercase">
               BY{' '}
-              <a
-                href="https://adgvit.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-white hover:text-[#42ff5a] transition-colors underline decoration-[#42ff5a]/60 underline-offset-4"
-              >
+              <span className="text-white">
                 ADG-VIT
-              </a>
+              </span>
             </span>
           </div>
 
