@@ -16,6 +16,8 @@ const CLOCK_SCALE = 0.85; // 1 = 100% size
 const LOGO_OFFSET_X = 0; // px, + moves right
 const LOGO_OFFSET_Y = 80; // px, + moves down
 const LOGO_SCALE = 0.75; // 1 = 100% size
+
+const DIGIT_WEIGHT = 500; // font-weight of the clock digits (100–900), higher = thicker
 /* ======================================== */
 
 type TimeLeft = {
@@ -71,8 +73,9 @@ function DigitCard({
   const bottomStyle = panelHalfStyle(hinge, "bottom");
 
   const numberClassName =
-    "absolute inset-x-0 top-0 flex h-[76px] items-center justify-center font-sans text-4xl font-bold tracking-tight text-[#42ff5a] sm:h-[104px] sm:text-6xl";
+    "absolute inset-x-0 top-0 flex h-[76px] items-center justify-center font-sans text-4xl tracking-tight text-[#42ff5a] sm:h-[104px] sm:text-6xl";
   const numberStyle: CSSProperties = {
+    fontWeight: DIGIT_WEIGHT,
     textShadow:
       "0 0 6px rgba(66,255,90,0.85), 0 0 16px rgba(66,255,90,0.55), 0 0 32px rgba(66,255,90,0.25)",
   };
