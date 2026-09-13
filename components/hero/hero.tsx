@@ -171,10 +171,8 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
 
 function CountdownClock() {
   const [time, setTime] = useState<TimeLeft>(getTimeLeft());
-  const [isMounted, setIsMounted] = useState(false);
 
   useEffect(() => {
-    setIsMounted(true);
     setTime(getTimeLeft());
     const interval = setInterval(() => {
       setTime(getTimeLeft());
@@ -238,27 +236,31 @@ export default function Hero() {
     let cleanup: (() => void) | undefined;
     let cancelled = false;
 
-    import("./three").then(({ initHero }) => {
-      if (cancelled) return;
+    import("./three")
+      .then(({ initHero }) => {
+        if (cancelled) return;
 
-      cleanup = initHero({
-        canvas: canvasRef.current!,
-        cursor: cursorRef.current!,
-        logoWrapper: logoWrapperRef.current!,
-        logoImg: logoImgRef.current!,
-        logoGlow: logoGlowRef.current!,
-        glitchLayers: [
-          glitchRedRef.current!,
-          glitchCyanRef.current!,
-          glitchWhiteRef.current!,
-        ],
-        noiseBars: [
-          noiseBar1Ref.current!,
-          noiseBar2Ref.current!,
-          noiseBar3Ref.current!,
-        ],
+        cleanup = initHero({
+          canvas: canvasRef.current!,
+          cursor: cursorRef.current!,
+          logoWrapper: logoWrapperRef.current!,
+          logoImg: logoImgRef.current!,
+          logoGlow: logoGlowRef.current!,
+          glitchLayers: [
+            glitchRedRef.current!,
+            glitchCyanRef.current!,
+            glitchWhiteRef.current!,
+          ],
+          noiseBars: [
+            noiseBar1Ref.current!,
+            noiseBar2Ref.current!,
+            noiseBar3Ref.current!,
+          ],
+        });
+      })
+      .catch((err) => {
+        console.warn("Hero canvas initialization deferred:", err);
       });
-    });
 
     return () => {
       cancelled = true;

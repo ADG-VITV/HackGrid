@@ -183,9 +183,6 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
               : "border-white/15 bg-white/[0.07] shadow-[0_24px_70px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.16)]"
           } ${isBrandOverdrive ? "hg-brand-overdrive" : ""}`}
         >
-          {/* Laser Scanline Beam Sweep */}
-          <div aria-hidden="true" className="hg-laser-scan pointer-events-none absolute inset-x-0 top-0 h-[2px] z-20" />
-
           {/* Interactive Mouse Spotlight Tracker */}
           <div
             aria-hidden="true"
@@ -476,12 +473,6 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
             display: none;
           }
 
-          .hg-laser-scan {
-            background: linear-gradient(90deg, transparent 0%, rgba(66, 255, 90, 0) 15%, #42ff5a 50%, rgba(66, 255, 90, 0) 85%, transparent 100%);
-            box-shadow: 0 0 12px #42ff5a, 0 0 20px #42ff5a;
-            animation: hg-laser-sweep 5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-          }
-
           .hg-nav-shell {
             animation: hg-nav-enter 220ms ease-out both;
             clip-path: inset(0 round 24px);
@@ -740,23 +731,6 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
             60% { opacity: 0.85; clip-path: inset(4% 0 78% 0); transform: translateX(-6px); }
             80% { opacity: 0.2; clip-path: inset(0 0 96% 0); transform: translateX(3px); }
             100% { opacity: 0; clip-path: inset(0 0 100% 0); transform: translateX(0); }
-          }
-
-          @keyframes hg-laser-sweep {
-            0% {
-              transform: translateX(-100%);
-              opacity: 0;
-            }
-            20% {
-              opacity: 1;
-            }
-            80% {
-              opacity: 1;
-            }
-            100% {
-              transform: translateX(100%);
-              opacity: 0;
-            }
           }
 
           @media (prefers-reduced-motion: reduce) {
