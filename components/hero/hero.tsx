@@ -71,6 +71,11 @@ function DigitCard({
   hinge: "left" | "right";
 }) {
   const [displayValue, setDisplayValue] = useState(digit);
+
+  useEffect(() => {
+    setDisplayValue(digit);
+  }, [digit]);
+
   const isFlipping = displayValue !== digit;
   const topStyle = panelHalfStyle(hinge, "top");
   const bottomStyle = panelHalfStyle(hinge, "bottom");
@@ -99,12 +104,12 @@ function DigitCard({
       >
         {/* Top half */}
         <div className="absolute inset-x-0 top-0 h-1/2 overflow-hidden" style={topStyle}>
-          <span className={numberClassName} style={numberStyle}>{displayValue}</span>
+          <span className={numberClassName} style={numberStyle} suppressHydrationWarning>{displayValue}</span>
         </div>
 
         {/* Bottom half */}
         <div className="absolute inset-x-0 bottom-0 h-1/2 overflow-hidden" style={bottomStyle}>
-          <span className={numberClassName} style={bottomNumberStyle}>
+          <span className={numberClassName} style={bottomNumberStyle} suppressHydrationWarning>
             {displayValue}
           </span>
         </div>
@@ -168,6 +173,7 @@ function CountdownClock() {
   const [time, setTime] = useState<TimeLeft>(getTimeLeft());
 
   useEffect(() => {
+    setTime(getTimeLeft());
     const interval = setInterval(() => {
       setTime(getTimeLeft());
     }, 1000);
@@ -177,6 +183,7 @@ function CountdownClock() {
 
   return (
     <div
+      suppressHydrationWarning
       style={{
         transform: `translate(${CLOCK_OFFSET_X}px, ${CLOCK_OFFSET_Y}px) scale(${CLOCK_SCALE})`,
       }}
