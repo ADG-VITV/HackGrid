@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import { MinusIcon, PlusIcon } from "./auction-icon";
-import { compactIncrement, formatCredits, incrementLabel } from "./auction-data";
+import { compactIncrement, incrementLabel } from "./auction-data";
+import { Credits } from "./credits";
 import { secondsUntil, type BidFeedback, type ConnectionState } from "./use-auction-socket";
 import type { LotView, RoomState } from "@/lib/socket-events";
 
@@ -142,7 +143,7 @@ export function ExpandedWorkspace({
                 {activeLot.top ? "Top bid" : "Starting bid"}
               </p>
               <p className="mt-1 font-mono text-4xl font-semibold text-neon lg:text-5xl">
-                {formatCredits(activeLot.top ? activeLot.top.amount : activeLot.startingBid)}
+                <Credits value={activeLot.top ? activeLot.top.amount : activeLot.startingBid} />
               </p>
               <p className="mt-1 text-sm text-zinc-500">
                 {activeLot.top ? (
@@ -187,12 +188,12 @@ export function ExpandedWorkspace({
                   <>
                     <strong className="font-semibold">You have been outbid</strong> by {activeLot.top.teamName}.
                     Next valid bid is{" "}
-                    <span className="font-mono font-semibold">{formatCredits(activeLot.nextMin)}</span>.
+                    <span className="font-mono font-semibold"><Credits value={activeLot.nextMin} /></span>.
                   </>
                 ) : (
                   <>
-                    Open at <span className="font-mono font-semibold">{formatCredits(activeLot.nextMin)}</span>{" "}
-                    credits. Minimum increment {incrementLabel(activeLot.minIncrement)}.
+                    Open at <span className="font-mono font-semibold"><Credits value={activeLot.nextMin} /></span>.
+                    Minimum increment {incrementLabel(activeLot.minIncrement)}.
                   </>
                 )}
               </div>
@@ -205,10 +206,10 @@ export function ExpandedWorkspace({
 
               <p className="mt-3 font-mono text-[0.65rem] text-zinc-500">
                 Bid cap this round{" "}
-                <span className="font-semibold text-zinc-300">{formatCredits(room.you.spendingCap)}</span>
+                <span className="font-semibold text-zinc-300"><Credits value={room.you.spendingCap} /></span>
                 {room.you.reserve > 0 ? (
                   <>
-                    {" "}· {formatCredits(room.you.reserve)} of your {formatCredits(room.you.remainingBalance)}{" "}
+                    {" "}· <Credits value={room.you.reserve} /> of your <Credits value={room.you.remainingBalance} />{" "}
                     is reserved for the capsules still to come
                   </>
                 ) : (
@@ -227,7 +228,7 @@ export function ExpandedWorkspace({
                   <MinusIcon />
                 </button>
                 <span className="min-w-28 text-center font-mono text-2xl font-semibold text-white lg:text-3xl">
-                  {formatCredits(amount)}
+                  <Credits value={amount} />
                 </span>
                 <button
                   type="button"
@@ -258,7 +259,11 @@ export function ExpandedWorkspace({
                     ? "Already won this capsule"
                     : !canAfford
                       ? "Over your bid cap for this round"
-                      : `Bid ${formatCredits(amount)} credits`}
+                      : (
+                        <>
+                          Bid <Credits value={amount} />
+                        </>
+                      )}
               </button>
               <p className="mt-2 text-[0.65rem] text-zinc-600">
                 Every bid is validated and recorded on the server. This panel only shows what the server
@@ -360,7 +365,7 @@ function RemainderWaiting({ room }: { room: RoomState }) {
         {room.lots.map((lot) => (
           <li key={lot.id} className="flex items-baseline justify-between gap-3 text-xs">
             <span className="min-w-0 truncate text-zinc-300">{lot.name}</span>
-            <span className="shrink-0 font-mono text-zinc-600">list {formatCredits(lot.listedPrice)}</span>
+            <span className="shrink-0 font-mono text-zinc-600">list <Credits value={lot.listedPrice} /></span>
           </li>
         ))}
       </ul>
@@ -413,7 +418,7 @@ function YourOutcome({ lot, podLabel }: { lot: LotView; podLabel: string }) {
         You paid
       </p>
       <p className="mt-1 font-mono text-4xl font-semibold text-neon lg:text-5xl">
-        {formatCredits(lot.result?.pricePaid ?? 0)}
+        <Credits value={lot.result?.pricePaid ?? 0} />
       </p>
 
       <div className="mt-5 max-w-md rounded-xl border border-neon/50 bg-neon/[0.08] px-4 py-3 text-sm text-neon">
@@ -443,13 +448,13 @@ function LotRow({ lot, youTeamId }: { lot: LotView; youTeamId: number }) {
     >
       <div className="flex items-start justify-between gap-3">
         <span className="min-w-0 flex-1 truncate text-sm text-zinc-200">{lot.name}</span>
-        <span className="shrink-0 font-mono text-sm text-neon">{formatCredits(lot.startingBid)}</span>
+        <span className="shrink-0 font-mono text-sm text-neon"><Credits value={lot.startingBid} /></span>
       </div>
       <div className="mt-1 flex items-center justify-between gap-2 text-[0.62rem]">
         <span className="text-zinc-500">Min increment: {compactIncrement(lot.minIncrement)}</span>
         {lot.status === "CLOSED" && lot.result ? (
           <span className={wonByYou ? "font-semibold text-neon" : "text-zinc-400"}>
-            {wonByYou ? "Won by you" : `Won by ${lot.result.teamName}`} · {formatCredits(lot.result.pricePaid)}
+            {wonByYou ? "Won by you" : `Won by ${lot.result.teamName}`} · <Credits value={lot.result.pricePaid} />
           </span>
         ) : lot.status === "OPEN" ? (
           <span className="font-semibold text-neon">Live · {lot.bidCount} bid(s)</span>

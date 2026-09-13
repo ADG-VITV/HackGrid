@@ -1,6 +1,7 @@
 "use client";
 
 import { formatCredits } from "./auction-data";
+import { Credits } from "./credits";
 import type { CapsuleContext, TeamResources } from "./actions";
 
 const sourceLabel: Record<string, string> = {
@@ -60,7 +61,7 @@ export function ResourceManager({
         <div className="flex items-baseline justify-between">
           <span className="text-[0.6rem] tracking-[0.14em] text-zinc-500 uppercase">Coins left</span>
           <span className="font-mono text-xl font-semibold text-neon">
-            {formatCredits(resources.remaining)}
+            <Credits value={resources.remaining} />
           </span>
         </div>
         <div
@@ -71,20 +72,24 @@ export function ResourceManager({
           <div className="h-full rounded-full bg-neon/70" style={{ width: `${spentPercent}%` }} />
         </div>
         <p className="mt-1.5 font-mono text-[0.6rem] text-zinc-600">
-          {formatCredits(resources.spent)} of {formatCredits(resources.startingBudget)} spent
+          <Credits value={resources.spent} /> of {formatCredits(resources.startingBudget)} spent
         </p>
         <div className="mt-2 flex items-baseline justify-between rounded-lg border border-white/5 bg-black/30 px-2.5 py-1.5">
           <span className="text-[0.58rem] tracking-[0.12em] text-zinc-500 uppercase">
             Bid cap · {capsules.find((c) => c.key === resources.reserveCapsuleKey)?.name ?? "this round"}
           </span>
           <span className="font-mono text-sm font-semibold text-zinc-200">
-            {formatCredits(resources.spendingCap)}
+            <Credits value={resources.spendingCap} />
           </span>
         </div>
         <p className="mt-1 font-mono text-[0.56rem] text-zinc-600">
-          {resources.reserve > 0
-            ? `${formatCredits(resources.reserve)} held back to cover the capsules still to come`
-            : "last capsule — nothing held back"}
+          {resources.reserve > 0 ? (
+            <>
+              <Credits value={resources.reserve} /> held back to cover the capsules still to come
+            </>
+          ) : (
+            "last capsule — nothing held back"
+          )}
         </p>
       </div>
 
@@ -108,7 +113,7 @@ export function ResourceManager({
                 </span>
                 {owned ? (
                   <span className="shrink-0 font-mono text-xs font-semibold text-neon">
-                    {formatCredits(owned.pricePaid)}
+                    <Credits value={owned.pricePaid} />
                   </span>
                 ) : null}
               </div>
