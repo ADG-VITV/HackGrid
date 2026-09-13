@@ -20,6 +20,20 @@ function statusTone(status: string) {
       : "border-amber-500/40 text-amber-300";
 }
 
+function podStatusTone(status: string) {
+  return status === "LIVE"
+    ? "border-neon/50 bg-neon/10 text-neon"
+    : status === "COMPLETE"
+      ? "border-zinc-700 bg-zinc-900 text-zinc-400"
+      : status === "WAITING_FOR_TEAMS"
+        ? "border-amber-500/40 bg-amber-500/10 text-amber-200"
+        : "border-zinc-700 text-zinc-400";
+}
+
+function podStatusLabel(status: string) {
+  return status === "WAITING_FOR_TEAMS" ? "WAITING FOR TEAMS" : status;
+}
+
 export function AdminClient() {
   const [context, setContext] = useState<AdminContext | null>(null);
   const [message, setMessage] = useState<AdminReport | null>(null);
@@ -201,6 +215,75 @@ export function AdminClient() {
                   </button>
                 ))}
               </div>
+
+              <details className="group mt-4 border-t border-white/5 pt-4">
+                <summary className="cursor-pointer list-none text-sm font-medium text-zinc-200 marker:hidden">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="text-neon transition-transform group-open:rotate-90">›</span>
+                    View pods and auction status
+                  </span>
+                </summary>
+                <div className="mt-3 space-y-3">
+                  {capsule.pods.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-zinc-800 px-3 py-3 text-xs text-zinc-500">
+                      Pods will appear here after the event is prepared.
+                    </p>
+                  ) : (
+                    capsule.pods.map((pod) => (
+                      <details key={pod.label} className="group/pod rounded-xl border border-white/10 bg-black/30 p-4">
+                        <summary className="cursor-pointer list-none marker:hidden">
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold text-white">
+                                {pod.label} <span className="font-normal text-zinc-500">· {pod.kind}</span>
+                              </p>
+                              <p className="mt-1 text-xs text-zinc-500">
+                                {pod.activeItemName
+                                  ? `Auctioning: ${pod.activeItemName}`
+                                  : `${pod.settledLots}/${pod.lotCount} lots settled`}
+                              </p>
+                            </div>
+                            <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${podStatusTone(pod.auctionStatus)}`}>
+                              {podStatusLabel(pod.auctionStatus)}
+                            </span>
+                          </div>
+                        </summary>
+                        <div className="mt-4 overflow-x-auto border-t border-white/5 pt-3">
+                          <table className="w-full min-w-[34rem] text-left text-xs">
+                            <thead className="text-zinc-500">
+                              <tr>
+                                <th className="pb-2 pr-3 font-medium">Seat</th>
+                                <th className="pb-2 pr-3 font-medium">Team</th>
+                                <th className="pb-2 pr-3 font-medium">Code</th>
+                                <th className="pb-2 font-medium">Round item</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-white/5 text-zinc-300">
+                              {pod.teams.map((team) => (
+                                <tr key={team.id}>
+                                  <td className="py-2.5 pr-3 font-mono text-zinc-500">{team.seat}</td>
+                                  <td className="py-2.5 pr-3 font-medium text-white">{team.name}</td>
+                                  <td className="py-2.5 pr-3 font-mono text-zinc-500">{team.code}</td>
+                                  <td className="py-2.5">
+                                    {team.item ? (
+                                      <span>
+                                        {team.item.name}
+                                        <span className="ml-1 text-zinc-500">· {team.item.pricePaid} credits</span>
+                                      </span>
+                                    ) : (
+                                      <span className="text-zinc-600">No item yet</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </details>
+                    ))
+                  )}
+                </div>
+              </details>
             </article>
           ))}
         </section>

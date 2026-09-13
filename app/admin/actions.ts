@@ -31,6 +31,26 @@ export type AdminContext = {
     podCount: number;
     memberCount: number;
     settlementCount: number;
+    pods: Array<{
+      label: string;
+      kind: "MAIN" | "REMAINDER";
+      auctionStatus: "PENDING" | "WAITING_FOR_TEAMS" | "LIVE" | "COMPLETE";
+      activeItemName: string | null;
+      settledLots: number;
+      lotCount: number;
+      teams: Array<{
+        id: number;
+        name: string;
+        code: string;
+        seat: number;
+        item: {
+          name: string;
+          tierRank: number;
+          pricePaid: number;
+          priceSource: "COMPETITIVE" | "AUTO_ASSIGNED" | "NO_BIDS_ASSIGNED" | "POD_AVERAGE" | "STARTING_BID_FALLBACK";
+        } | null;
+      }>;
+    }>;
     subCapsules: Array<{ key: string; name: string; tierRank: number; isAutoAssigned: boolean }>;
   }>;
 };
