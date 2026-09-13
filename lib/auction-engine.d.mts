@@ -89,6 +89,12 @@ export type BiddingContextResult = {
     startingBudget: number;
     spent: number;
     remaining: number;
+  /** Coins held back for the capsules after the one the team is in now. */
+  reserve: number;
+  /** remaining - reserve: the most the team may bid in its current capsule. */
+  spendingCap: number;
+  /** Which capsule `reserve` was computed for. */
+  reserveCapsuleKey: string | null;
     owned: {
       capsuleKey: string;
       capsuleName: string;

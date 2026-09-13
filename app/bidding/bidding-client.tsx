@@ -134,7 +134,9 @@ export function BiddingClient() {
   // ------------------------------------------------------------------ socket
 
   // Exactly one capsule runs at a time, so there is exactly one room to be in.
-  const liveCapsule = context.capsules.find((capsule) => capsule.status === "LIVE") ?? null;
+  // The server keeps exactly one capsule live; if it ever reports more, the
+  // one furthest along the running order is the current round.
+  const liveCapsule = context.capsules.findLast((capsule) => capsule.status === "LIVE") ?? null;
   const activePodId = liveCapsule?.podId ?? null;
 
   const { connection, state: room, entries, feedback, clockSkew, placeBid, clearEntries, lastEvent } =
@@ -199,7 +201,7 @@ export function BiddingClient() {
       return eventComplete
         ? "Every round is finished. Your final product spec is in the Resource Manager."
         : IS_DEV
-          ? "No round is live. Hit Start event to prepare every round, then open a prepared round from admin or with the force control here."
+          ? "No round is live. Hit Start event to prepare every round's pods, then open one from /admin or with Force here. Nothing opens on its own."
           : "The auction has not started yet. This page will come alive when the first round opens.";
     }
     if (!liveCapsule.podId) {
@@ -244,7 +246,7 @@ export function BiddingClient() {
               Reset event
             </button>
             <span className="text-[0.62rem] text-zinc-600">
-              Prepares all {auctionTiles.length} rounds and locks in their pods. Use Force to open a round in development.
+              Start event prepares all {auctionTiles.length} rounds and locks in their pods; it opens nothing. Force opens a round out of order, closing whichever was live.
             </span>
           </div>
         ) : null}
@@ -255,7 +257,9 @@ export function BiddingClient() {
               {context.capsules.map((capsule) => {
                 const isLive = capsule.status === "LIVE";
                 const isClosed = capsule.status === "CLOSED";
-                const isOpen = isLive && expanded;
+                // The pod room belongs to the current round only, never to a
+                // tile that merely shares its status.
+                const isOpen = capsule.key === liveCapsule?.key && expanded;
                 const tile = auctionTiles.find((t) => t.id === capsule.key);
                 const biddable =
                   tile?.items.filter((item) => item.minIncrement !== null).length ?? 0;

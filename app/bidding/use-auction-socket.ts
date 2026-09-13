@@ -30,7 +30,6 @@ export type BidFeedback = {
 export type LifecycleEvent =
   | { type: "LOT_CLOSED" }
   | { type: "CAPSULE_CLOSED" }
-  | { type: "CAPSULE_HANDOVER" }
   | { type: "CAPSULE_OPENED" }
   | { type: "EVENT_COMPLETE" };
 
@@ -138,14 +137,14 @@ export function useAuctionSocket(podId: string | null, teamId: string | null) {
       pushEntry("success", "Every tier in this pod is settled.");
     });
 
-    socket.on("CAPSULE_CLOSED", () => {
-      pushEntry("success", "This round is finished.");
+    socket.on("CAPSULE_CLOSED", ({ nextKey }) => {
+      pushEntry(
+        "success",
+        nextKey
+          ? "This round is finished. The next opens when the organiser starts it — pods are redrawn then."
+          : "This round is finished.",
+      );
       setLastEvent({ type: "CAPSULE_CLOSED" });
-    });
-
-    socket.on("CAPSULE_HANDOVER", () => {
-      pushEntry("info", "Next round opens shortly — pods are drawn when it does.");
-      setLastEvent({ type: "CAPSULE_HANDOVER" });
     });
 
     socket.on("CAPSULE_OPENED", () => {

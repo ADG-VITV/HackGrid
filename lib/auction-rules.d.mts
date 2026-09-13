@@ -2,7 +2,6 @@ export const SUBCAPSULE_SECONDS: number;
 export const BID_TIMEOUT_SECONDS: number;
 export const STARTING_BALANCE: number;
 export const REMAINDER_PICK_SECONDS: number;
-export const CAPSULE_HANDOVER_SECONDS: number;
 
 export function quorumFor(podSize: number): number;
 
@@ -15,11 +14,14 @@ export type BidRejectionCode =
   | "ALREADY_TOP"
   | "BELOW_MINIMUM"
   | "OVER_BUDGET"
+  | "RESERVE_LOCKED"
   | "NOT_INTEGER"
   | "ALREADY_CLAIMED"
   | "AWAITING_QUORUM";
 
 export const BID_REJECTED: Record<BidRejectionCode, string>;
+
+export function spendingCapFor(input: { remainingBalance: number; reserve?: number }): number;
 
 export function nextMinBid(input: {
   startingBid: number;
@@ -34,7 +36,7 @@ export function computeClosesAt(input: {
 
 export type BidValidation =
   | { ok: true; amount: number }
-  | { ok: false; code: BidRejectionCode; reason: string; nextMin?: number };
+  | { ok: false; code: BidRejectionCode; reason: string; nextMin?: number; spendingCap?: number; reserve?: number };
 
 export function validateBid(input: {
   amount: number;
@@ -50,6 +52,7 @@ export function validateBid(input: {
   isSeatedInPod: boolean;
   hasWonInCapsule: boolean;
   remainingBalance: number;
+  reserve?: number;
   holdsAnotherClaim?: boolean;
   timerStarted?: boolean;
 }): BidValidation;

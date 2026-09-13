@@ -68,6 +68,10 @@ export type RoomState = {
     teamId: number;
     teamName: string;
     remainingBalance: number;
+    /** Coins that must stay untouched for the capsules after this one. */
+    reserve: number;
+    /** The most this team may bid in this capsule: remainingBalance - reserve. */
+    spendingCap: number;
     wonLotId: string | null;
   };
   lots: LotView[];
@@ -102,8 +106,8 @@ export type ServerToClientEvents = {
     pricePaid: number | null;
   }) => void;
   POD_COMPLETE: (payload: { podId: string }) => void;
-  CAPSULE_CLOSED: (payload: { capsuleId: string }) => void;
-  CAPSULE_HANDOVER: (payload: { nextKey: string; opensAt: string }) => void;
+  /** `nextKey` is the capsule the organiser opens next; null after the last one. */
+  CAPSULE_CLOSED: (payload: { capsuleId: string; nextKey: string | null }) => void;
   CAPSULE_OPENED: (payload: { capsuleKey: string; capsuleId: string }) => void;
   EVENT_COMPLETE: () => void;
   LOG: (payload: { level: "info" | "warn" | "error"; message: string; at: string }) => void;
