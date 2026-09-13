@@ -18,6 +18,9 @@ const LOGO_OFFSET_Y = 80; // px, + moves down
 const LOGO_SCALE = 0.75; // 1 = 100% size
 
 const DIGIT_WEIGHT = 500; // font-weight of the clock digits (100–900), higher = thicker
+
+const CARD_HEIGHT = 56; // px, height of each digit rectangle (mobile)
+const CARD_HEIGHT_SM = 90; // px, height of each digit rectangle (sm and up)
 /* ======================================== */
 
 type TimeLeft = {
@@ -73,7 +76,7 @@ function DigitCard({
   const bottomStyle = panelHalfStyle(hinge, "bottom");
 
   const numberClassName =
-    "absolute inset-x-0 top-0 flex h-[76px] items-center justify-center font-sans text-4xl tracking-tight text-[#42ff5a] sm:h-[104px] sm:text-6xl";
+    "absolute inset-x-0 top-0 flex h-[var(--card-h)] items-center justify-center font-sans text-4xl tracking-tight text-[#42ff5a] sm:h-[var(--card-h-sm)] sm:text-6xl";
   const numberStyle: CSSProperties = {
     fontWeight: DIGIT_WEIGHT,
     textShadow:
@@ -87,8 +90,12 @@ function DigitCard({
   return (
     <div className="relative">
       <div
-        className="relative h-[76px] w-[42px] overflow-hidden rounded-md bg-[#3a4039] shadow-[0_10px_30px_rgba(0,0,0,0.55),0_0_16px_rgba(66,255,90,0.18)] sm:h-[104px] sm:w-[57px] sm:rounded-lg"
-        style={{ perspective: "260px" }}
+        className="relative h-[var(--card-h)] w-[42px] overflow-hidden rounded-md bg-[#3a4039] shadow-[0_10px_30px_rgba(0,0,0,0.55),0_0_16px_rgba(66,255,90,0.18)] sm:h-[var(--card-h-sm)] sm:w-[57px] sm:rounded-lg"
+        style={{
+          perspective: "260px",
+          ["--card-h" as string]: `${CARD_HEIGHT}px`,
+          ["--card-h-sm" as string]: `${CARD_HEIGHT_SM}px`,
+        }}
       >
         {/* Top half */}
         <div className="absolute inset-x-0 top-0 h-1/2 overflow-hidden" style={topStyle}>
