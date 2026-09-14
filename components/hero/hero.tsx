@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 
 const COUNTDOWN_TARGET = new Date("2026-09-16T08:00:00");
@@ -30,8 +30,8 @@ type TimeLeft = {
   seconds: number;
 };
 
-function getTimeLeft(): TimeLeft {
-  const diff = Math.max(0, COUNTDOWN_TARGET.getTime() - Date.now());
+function getTimeLeft(nowMs: number): TimeLeft {
+  const diff = Math.max(0, COUNTDOWN_TARGET.getTime() - nowMs);
 
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff / (1000 * 60 * 60)) % 24);
@@ -164,38 +164,26 @@ function FlipUnit({ value, label }: { value: number; label: string }) {
   );
 }
 
+const ZERO_TIME: TimeLeft = { days: 0, hours: 0, minutes: 0, seconds: 0 };
+
+/* Wall clock as an external store, ticking once a second. Snapshot is the
+   current second (a primitive) so identical values don't re-render. The
+   server snapshot is null: server and client then render identical HTML
+   and the real time only appears after hydration. */
+function subscribeEverySecond(onTick: () => void) {
+  const id = setInterval(onTick, 1000);
+  return () => clearInterval(id);
+}
+const getNowSeconds = () => Math.floor(Date.now() / 1000);
+const getServerNow = () => null;
+
 function CountdownClock() {
-  const [time, setTime] = useState<TimeLeft>(getTimeLeft());
-  const [isMounted, setIsMounted] = useState(false);
+  const nowSeconds = useSyncExternalStore(subscribeEverySecond, getNowSeconds, getServerNow);
+  const time = nowSeconds === null ? null : getTimeLeft(nowSeconds * 1000);
 
-  useEffect(() => {
-    setIsMounted(true);
-    const interval = setInterval(() => {
-      setTime(getTimeLeft());
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  if (!isMounted) {
-    return (
-      <div
-        style={{
-          transform: `translate(${CLOCK_OFFSET_X}px, ${CLOCK_OFFSET_Y}px) scale(${CLOCK_SCALE})`,
-        }}
-      >
-        <div className="relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3 opacity-0">
-          <FlipUnit value={0} label="Days" />
-          <FlipSeparator />
-          <FlipUnit value={0} label="Hours" />
-          <FlipSeparator />
-          <FlipUnit value={0} label="Minutes" />
-          <FlipSeparator />
-          <FlipUnit value={0} label="Seconds" />
-        </div>
-      </div>
-    );
-  }
+  /* Keying the digit row on readiness remounts the DigitCards with their
+     real value instead of flip-animating from the 00 placeholder. */
+  const shown = time ?? ZERO_TIME;
 
   return (
     <div
@@ -203,14 +191,19 @@ function CountdownClock() {
         transform: `translate(${CLOCK_OFFSET_X}px, ${CLOCK_OFFSET_Y}px) scale(${CLOCK_SCALE})`,
       }}
     >
-      <div className="relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3">
-        <FlipUnit value={time.days} label="Days" />
+      <div
+        key={time ? "live" : "placeholder"}
+        className={`relative z-10 mt-10 flex items-center justify-center gap-2 sm:gap-3 ${
+          time ? "" : "invisible"
+        }`}
+      >
+        <FlipUnit value={shown.days} label="Days" />
         <FlipSeparator />
-        <FlipUnit value={time.hours} label="Hours" />
+        <FlipUnit value={shown.hours} label="Hours" />
         <FlipSeparator />
-        <FlipUnit value={time.minutes} label="Minutes" />
+        <FlipUnit value={shown.minutes} label="Minutes" />
         <FlipSeparator />
-        <FlipUnit value={time.seconds} label="Seconds" />
+        <FlipUnit value={shown.seconds} label="Seconds" />
       </div>
     </div>
   );
@@ -251,27 +244,31 @@ export default function Hero() {
     let cleanup: (() => void) | undefined;
     let cancelled = false;
 
-    import("./three").then(({ initHero }) => {
-      if (cancelled) return;
+    import("./three")
+      .then(({ initHero }) => {
+        if (cancelled) return;
 
-      cleanup = initHero({
-        canvas: canvasRef.current!,
-        cursor: cursorRef.current!,
-        logoWrapper: logoWrapperRef.current!,
-        logoImg: logoImgRef.current!,
-        logoGlow: logoGlowRef.current!,
-        glitchLayers: [
-          glitchRedRef.current!,
-          glitchCyanRef.current!,
-          glitchWhiteRef.current!,
-        ],
-        noiseBars: [
-          noiseBar1Ref.current!,
-          noiseBar2Ref.current!,
-          noiseBar3Ref.current!,
-        ],
+        cleanup = initHero({
+          canvas: canvasRef.current!,
+          cursor: cursorRef.current!,
+          logoWrapper: logoWrapperRef.current!,
+          logoImg: logoImgRef.current!,
+          logoGlow: logoGlowRef.current!,
+          glitchLayers: [
+            glitchRedRef.current!,
+            glitchCyanRef.current!,
+            glitchWhiteRef.current!,
+          ],
+          noiseBars: [
+            noiseBar1Ref.current!,
+            noiseBar2Ref.current!,
+            noiseBar3Ref.current!,
+          ],
+        });
+      })
+      .catch((err) => {
+        console.warn("Hero canvas initialization deferred:", err);
       });
-    });
 
     return () => {
       cancelled = true;

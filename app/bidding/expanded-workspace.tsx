@@ -287,7 +287,7 @@ export function ExpandedWorkspace({
         <section className="flex min-w-0 flex-col gap-4 lg:w-[39%]">
           <div className="rounded-[20px] border border-neon/20 bg-zinc-950/60 p-4">
             <h4 className="text-[0.65rem] font-semibold tracking-[0.16em] text-zinc-500 uppercase">
-              {room.pod.label} · {room.members.length} of {room.pod.podSize} seats
+              {room.pod.label} · {room.pod.onlineCount} of {room.pod.podSize} online
             </h4>
             <ul className="mt-3 space-y-1.5">
               {room.members.map((member) => (
