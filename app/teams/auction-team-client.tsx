@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState, useEffect, useState, useTransition } from "react";
 import { FaRegCircleUser, FaRegSquarePlus } from "react-icons/fa6";
 import {
@@ -7,57 +8,39 @@ import {
   submitAuctionTeamAction,
   type AuctionTeamState,
 } from "./actions";
+import { ActAsCard } from "./act-as-card";
 import { TeamDashboard } from "./team-dashboard";
-import { useRequireSignIn, useViewerEmail } from "@/lib/use-viewer-email";
+import { useViewer } from "@/lib/use-viewer";
 import {
   Chip,
   CornerMarks,
   Eyebrow,
   Panel,
+  ghostButton,
   inputField,
   primaryButton,
 } from "@/components/ui/panel";
+
+const IS_DEV = process.env.NODE_ENV === "development";
 
 const initialAuctionTeamState: AuctionTeamState = {
   status: "idle",
   message: "",
 };
 
-const devBypassState: AuctionTeamState = {
-  status: "success",
-  message: "",
-  viewerRole: "LEADER",
-  team: {
-    id: -1,
-    name: "Dev Team",
-    code: "HG-DEV000",
-    members: [
-      { id: -1, name: "Dev User", email: "dev@hackgrid.local", role: "LEADER", joinOrder: 1 },
-    ],
-  },
-};
-
 type FormKind = "join" | "create";
 
-function TeamModal({
-  kind,
+function Modal({
+  eyebrow,
+  title,
   onClose,
-  email,
-  setEmail,
-  emailLocked,
-  isBusy,
-  submit,
+  children,
 }: {
-  kind: FormKind;
+  eyebrow: string;
+  title: string;
   onClose: () => void;
-  email: string;
-  setEmail: (value: string) => void;
-  emailLocked: boolean;
-  isBusy: boolean;
-  submit: (formData: FormData) => void;
+  children: React.ReactNode;
 }) {
-  const isJoin = kind === "join";
-
   return (
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4 backdrop-blur-md"
@@ -70,10 +53,8 @@ function TeamModal({
         <CornerMarks />
         <div className="flex items-start justify-between gap-4">
           <div>
-            <Eyebrow tone="neon">{isJoin ? "Join" : "Create"}</Eyebrow>
-            <h2 className="mt-1 text-xl font-semibold text-white">
-              {isJoin ? "Join a team" : "Create a team"}
-            </h2>
+            <Eyebrow tone="neon">{eyebrow}</Eyebrow>
+            <h2 className="mt-1 text-xl font-semibold text-white">{title}</h2>
           </div>
           <button
             type="button"
@@ -84,81 +65,123 @@ function TeamModal({
             &times;
           </button>
         </div>
-
-        <form action={submit} className="mt-5">
-          <input type="hidden" name="intent" value={kind} />
-          <p className="text-sm leading-6 text-zinc-500">
-            {isJoin
-              ? "Enter the code your lead shared. You will be listed after the people already in."
-              : "You become the team lead — the one account that bids for the team."}
-          </p>
-
-          {isJoin ? (
-            <label className="mt-5 block text-sm font-medium text-zinc-300">
-              Team code
-              <input
-                name="teamCode"
-                placeholder="HG-ABC123"
-                autoComplete="off"
-                className={`${inputField} font-mono tracking-[0.14em] uppercase`}
-              />
-            </label>
-          ) : (
-            <label className="mt-5 block text-sm font-medium text-zinc-300">
-              Team name
-              <input name="teamName" placeholder="Team Alpha" className={inputField} />
-            </label>
-          )}
-
-          <label className="mt-4 block text-sm font-medium text-zinc-300">
-            Gmail
-            <input
-              name="email"
-              type="email"
-              value={email}
-              readOnly={emailLocked}
-              onChange={(event) => setEmail(event.target.value)}
-              placeholder="you@gmail.com"
-              className={inputField}
-            />
-            {emailLocked ? (
-              <span className="mt-1.5 block font-mono text-[0.6rem] text-zinc-600">
-                From your Google sign-in.
-              </span>
-            ) : null}
-          </label>
-
-          <label className="mt-4 block text-sm font-medium text-zinc-300">
-            Your name
-            <input
-              name={isJoin ? "memberName" : "leaderName"}
-              placeholder={isJoin ? "Your name" : "Team lead name"}
-              className={inputField}
-            />
-          </label>
-
-          {isJoin ? null : (
-            <label className="mt-5 flex gap-3 rounded-xl border border-neon/20 bg-neon/[0.04] p-3 text-sm leading-6 text-zinc-300">
-              <input
-                name="leaderAccepted"
-                type="checkbox"
-                defaultChecked
-                required
-                className="mt-1 size-4 accent-[#42ff5a]"
-              />
-              <span>
-                Creating a team makes me the team lead. I alone bid in the auction; my members
-                watch.
-              </span>
-            </label>
-          )}
-
-          <button type="submit" disabled={isBusy} className={`${primaryButton} mt-6 w-full`}>
-            {isBusy ? "Working…" : isJoin ? "Join team" : "Generate team code"}
-          </button>
-        </form>
+        {children}
       </Panel>
     </div>
+  );
+}
+
+/** What a signed-out visitor gets instead of the form. */
+function SignInPrompt({ kind, onClose }: { kind: FormKind; onClose: () => void }) {
+  const isJoin = kind === "join";
+
+  return (
+    <Modal
+      eyebrow="Sign in"
+      title={isJoin ? "Sign in to join a team" : "Sign in to create a team"}
+      onClose={onClose}
+    >
+      <p className="mt-5 text-sm leading-6 text-zinc-500">
+        Your team is tied to your Google account. Continue with Google and you will land back here
+        {isJoin ? " with your code ready to enter." : " ready to name your team."}
+      </p>
+      <div className="mt-6 flex flex-col gap-2 sm:flex-row">
+        <Link href="/login" className={`${primaryButton} flex-1`}>
+          Continue with Google
+          <span aria-hidden>→</span>
+        </Link>
+        <button type="button" onClick={onClose} className={ghostButton}>
+          Not now
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+function TeamModal({
+  kind,
+  onClose,
+  email,
+  isBusy,
+  submit,
+}: {
+  kind: FormKind;
+  onClose: () => void;
+  email: string;
+  isBusy: boolean;
+  submit: (formData: FormData) => void;
+}) {
+  const isJoin = kind === "join";
+
+  return (
+    <Modal
+      eyebrow={isJoin ? "Join" : "Create"}
+      title={isJoin ? "Join a team" : "Create a team"}
+      onClose={onClose}
+    >
+      <form action={submit} className="mt-5">
+        <input type="hidden" name="intent" value={kind} />
+        <p className="text-sm leading-6 text-zinc-500">
+          {isJoin
+            ? "Enter the code your lead shared. You will be listed after the people already in."
+            : "You become the team lead — the one account that bids for the team."}
+        </p>
+
+        {isJoin ? (
+          <label className="mt-5 block text-sm font-medium text-zinc-300">
+            Team code
+            <input
+              name="teamCode"
+              placeholder="HG-ABC123"
+              autoComplete="off"
+              className={`${inputField} font-mono tracking-[0.14em] uppercase`}
+            />
+          </label>
+        ) : (
+          <label className="mt-5 block text-sm font-medium text-zinc-300">
+            Team name
+            <input name="teamName" placeholder="Team Alpha" className={inputField} />
+          </label>
+        )}
+
+        <label className="mt-4 block text-sm font-medium text-zinc-300">
+          Gmail
+          <input name="email" type="email" value={email} readOnly className={inputField} />
+          <span className="mt-1.5 block font-mono text-[0.6rem] text-zinc-600">
+            From your Google sign-in.
+          </span>
+        </label>
+
+        <label className="mt-4 block text-sm font-medium text-zinc-300">
+          Your name
+          <input
+            name={isJoin ? "memberName" : "leaderName"}
+            placeholder={isJoin ? "Your name" : "Team lead name"}
+            className={inputField}
+          />
+        </label>
+
+        {isJoin ? null : (
+          <label className="mt-5 flex gap-3 rounded-xl border border-neon/20 bg-neon/[0.04] p-3 text-sm leading-6 text-zinc-300">
+            <input
+              name="leaderAccepted"
+              type="checkbox"
+              defaultChecked
+              required
+              className="mt-1 size-4 accent-[#42ff5a]"
+            />
+            <span>
+              Creating a team makes me the team lead. I alone bid in the auction; my members
+              watch.
+            </span>
+          </label>
+        )}
+
+        <button type="submit" disabled={isBusy} className={`${primaryButton} mt-6 w-full`}>
+          {isBusy ? "Working…" : isJoin ? "Join team" : "Generate team code"}
+        </button>
+      </form>
+    </Modal>
   );
 }
 
@@ -173,17 +196,12 @@ export function AuctionTeamClient() {
     email: "",
     state: initialAuctionTeamState,
   });
-  const [typedEmail, setTypedEmail] = useState("");
-  const [devBypassTeam, setDevBypassTeam] = useState(false);
   const [openForm, setOpenForm] = useState<FormKind | null>(null);
+  const [signInFor, setSignInFor] = useState<FormKind | null>(null);
 
-  const viewer = useViewerEmail();
-  // Production: no session, no teams page. Development keeps the typed-email flow.
-  const { blocked } = useRequireSignIn();
-  const isDev = process.env.NODE_ENV === "development";
-
-  // The signed-in email wins; a typed one is only for people without a session.
-  const email = viewer.signedIn ? viewer.email : typedEmail || viewer.email;
+  // The Google session — or, in development, the person picked in the box
+  // beside the two cards. Either way the page only ever knows one email.
+  const viewer = useViewer();
 
   useEffect(() => {
     const target = viewer.email;
@@ -194,40 +212,42 @@ export function AuctionTeamClient() {
     });
   }, [viewer.email]);
 
-  // A just-submitted form is the freshest truth; otherwise the roster lookup
-  // for the current email, and never a lookup that answered for another one.
-  const visibleState = actionState.team
+  // A just-submitted form is the freshest truth, as long as it was submitted
+  // by the person now looking; otherwise the roster lookup for the current
+  // email, and never a lookup that answered for another one.
+  const submittedByViewer =
+    Boolean(viewer.email) &&
+    Boolean(actionState.team?.members.some((member) => member.email === viewer.email));
+  const visibleState = submittedByViewer
     ? actionState
     : lookup.email === viewer.email
       ? lookup.state
       : initialAuctionTeamState;
   const lookedUp = !viewer.email || lookup.email === viewer.email;
   const isBusy = pending || isLookupPending;
+  const showActAs = IS_DEV && !viewer.actingAs;
 
-  function submit(formData: FormData) {
-    const submitted = formData.get("email");
-    if (typeof submitted === "string" && submitted.trim()) viewer.remember(submitted);
-    return formAction(formData);
+  /** The cards are open to everyone; the forms behind them need a session. */
+  function choose(kind: FormKind) {
+    if (viewer.signedIn) setOpenForm(kind);
+    else setSignInFor(kind);
   }
 
   // Nothing to show until the session is known and the roster lookup has
   // answered — a lead who refreshes should not see "create a team" flash
-  // before their team appears, and a signed-out visitor sees nothing at all
-  // on the way to /login.
-  if (blocked || viewer.loading) {
+  // before their team appears.
+  if (viewer.loading) {
     return (
       <main className="flex min-h-dvh items-center justify-center bg-black pt-16">
-        <Chip tone="muted">{blocked && !viewer.loading ? "Sign in to continue…" : "Loading…"}</Chip>
+        <Chip tone="muted">Loading…</Chip>
       </main>
     );
   }
 
-  if (devBypassTeam) {
-    return <TeamDashboard state={devBypassState} viewerEmail={email} signedIn={viewer.signedIn} />;
-  }
-
   if (visibleState.team) {
-    return <TeamDashboard state={visibleState} viewerEmail={email} signedIn={viewer.signedIn} />;
+    return (
+      <TeamDashboard state={visibleState} viewerEmail={viewer.email} signedIn={viewer.signedIn} />
+    );
   }
 
   if (!lookedUp) {
@@ -240,7 +260,9 @@ export function AuctionTeamClient() {
 
   return (
     <main className="flex min-h-dvh flex-col overflow-x-hidden bg-black p-4 pt-20 text-zinc-100 sm:p-[3%] sm:pt-24">
-      <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-6">
+      <div
+        className={`mx-auto flex w-full flex-1 flex-col gap-6 ${showActAs ? "max-w-7xl" : "max-w-5xl"}`}
+      >
         <header className="flex flex-wrap items-end justify-between gap-4 px-1">
           <div>
             <Eyebrow tone="neon">Teams</Eyebrow>
@@ -257,21 +279,24 @@ export function AuctionTeamClient() {
           </Chip>
         </header>
 
-        <section className="grid flex-1 gap-4 md:grid-cols-2">
+        <section
+          className={`grid flex-1 gap-4 md:grid-cols-2 ${showActAs ? "xl:grid-cols-3" : ""}`}
+        >
           <ChoiceCard
             icon={<FaRegCircleUser className="size-10" aria-hidden />}
             eyebrow="Have a code?"
             title="Join a team"
             body="Your lead shares an HG- code. Enter it and you are on the roster."
-            onClick={() => setOpenForm("join")}
+            onClick={() => choose("join")}
           />
           <ChoiceCard
             icon={<FaRegSquarePlus className="size-10" aria-hidden />}
             eyebrow="Starting fresh?"
             title="Create a team"
             body="Get a code to share. Creating the team makes you its lead — the one who bids."
-            onClick={() => setOpenForm("create")}
+            onClick={() => choose("create")}
           />
+          {showActAs ? <ActAsCard /> : null}
         </section>
 
         {actionState.message ? (
@@ -286,35 +311,17 @@ export function AuctionTeamClient() {
             {actionState.message}
           </p>
         ) : null}
-
-        {isDev ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.04] px-4 py-2.5">
-            <span className="font-mono text-[0.6rem] tracking-[0.14em] text-amber-500/80 uppercase">
-              Dev
-            </span>
-            <button
-              type="button"
-              onClick={() => setDevBypassTeam(true)}
-              className="rounded-lg border border-amber-500/40 px-3 py-1.5 text-[0.6rem] font-semibold tracking-wide text-amber-400/90 uppercase transition hover:bg-amber-500/10"
-            >
-              Skip team making
-            </button>
-            <span className="text-[0.62rem] text-zinc-600">
-              Opens the dashboard as a fake lead. Nothing is written to the database.
-            </span>
-          </div>
-        ) : null}
       </div>
+
+      {signInFor ? <SignInPrompt kind={signInFor} onClose={() => setSignInFor(null)} /> : null}
 
       {openForm ? (
         <TeamModal
           kind={openForm}
           onClose={() => setOpenForm(null)}
-          email={email}
-          setEmail={setTypedEmail}
-          emailLocked={viewer.signedIn}
+          email={viewer.email}
           isBusy={isBusy}
-          submit={submit}
+          submit={formAction}
         />
       ) : null}
     </main>

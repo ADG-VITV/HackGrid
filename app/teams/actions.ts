@@ -323,3 +323,50 @@ export async function submitAuctionTeamAction(
     return databaseError(error);
   }
 }
+
+export type RosterUser = {
+  id: number;
+  name: string;
+  email: string;
+  /** Null when the person is on no team. */
+  role: "LEADER" | "MEMBER" | null;
+  teamName: string | null;
+};
+
+/**
+ * Everyone in the users table, for the development-only "act as" picker on
+ * the teams page. Empty in production: nothing there lists other people.
+ */
+export async function listUsersAction(): Promise<RosterUser[]> {
+  if (process.env.NODE_ENV !== "development" || !process.env.DATABASE_URL) {
+    return [];
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { name: "asc" },
+      relationLoadStrategy: "join",
+      include: {
+        memberships: {
+          orderBy: { joinedAt: "desc" },
+          take: 1,
+          select: { team: { select: { name: true, leaderId: true } } },
+        },
+      },
+    });
+
+    return users.map((user) => {
+      const team = user.memberships[0]?.team ?? null;
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: team ? (team.leaderId === user.id ? "LEADER" : "MEMBER") : null,
+        teamName: team?.name ?? null,
+      };
+    });
+  } catch (error) {
+    console.error("listUsersAction failed:", error);
+    return [];
+  }
+}
