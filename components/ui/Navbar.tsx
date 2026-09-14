@@ -23,7 +23,7 @@ const navItems = [
   { name: "Home", href: "/#home" },
   { name: "About", href: "/#about" },
   { name: "Timeline", href: "/#timeline" },
-  { name: "Rules", href: "/#rules" },
+  { name: "Rules", href: "/rules" },
   { name: "Bidding", href: "/bidding" },
   { name: "Teams", href: "/teams" },
 ];
@@ -63,7 +63,9 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
   const [isScrolled, setIsScrolled] = useState(false);
   const [spotlightPos, setSpotlightPos] = useState({ x: -200, y: -200 });
   const [isSpotlightVisible, setIsSpotlightVisible] = useState(false);
-  const resolvedUser = user ?? auth.user;
+  // Props override the auth context when given — including `user={null}`,
+  // which means "signed out" rather than "use the session".
+  const resolvedUser = user === undefined ? auth.user : user;
   const resolvedLoading = loading ?? auth.loading;
   const resolvedOnSignOut = onSignOut ?? auth.signOut;
 
@@ -99,7 +101,9 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
               }
             });
           },
-          { threshold: 0.3 }
+          // A section is current while it covers the middle of the viewport.
+          // A ratio threshold would never fire for the timeline (2400vh).
+          { rootMargin: "-45% 0px -45% 0px", threshold: 0 }
         );
 
         sections.forEach((section) => observer.observe(section));
@@ -169,7 +173,7 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
         "--font-geist-pixel-square": PIXEL_FONT,
       } as React.CSSProperties}
     >
-      <div className="mx-auto max-w-[1440px]">
+      <div className="relative mx-auto max-w-[1440px]">
         <div
           onMouseMove={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
@@ -293,44 +297,6 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
                     <span className="hidden font-semibold tracking-[0.04em] sm:inline" style={{ fontFamily: PIXEL_FONT, fontSize: "0.62rem" }}>{resolvedUser.displayName || "User"}</span>
                     <FiChevronDown className={`size-3.5 transition-transform duration-200 ${isAccountMenuOpen ? "rotate-180 text-[#42ff5a]" : "text-[#42ff5a]/70 group-hover/user:text-[#42ff5a]"}`} />
                   </button>
-
-                  {isAccountMenuOpen ? (
-                    <div className="absolute right-0 top-full z-50 mt-3 w-64 rounded-2xl border border-[#42ff5a]/30 bg-black/95 p-2 shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(66,255,90,0.12)] backdrop-blur-2xl" role="menu">
-                      <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
-                        <div className="flex items-center gap-3">
-                          <Avatar src={resolvedUser.photoURL} alt={resolvedUser.displayName || "User"} name={resolvedUser.displayName} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-1">
-                              <p className="truncate text-xs font-semibold text-white" style={{ fontFamily: PIXEL_FONT, fontSize: "0.62rem" }}>{resolvedUser.displayName || "User"}</p>
-                              <span className="rounded bg-[#42ff5a]/15 px-1.5 py-0.5 font-bold tracking-widest text-[#42ff5a] border border-[#42ff5a]/30" style={{ fontFamily: PIXEL_FONT, fontSize: "0.48rem" }}>ONLINE</span>
-                            </div>
-                            <p className="truncate text-zinc-400 mt-0.5" style={{ fontFamily: PIXEL_FONT, fontSize: "0.52rem" }}>{resolvedUser.email || "No email"}</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="mt-2 space-y-1">
-                        <button type="button" className="group/item flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-xs font-medium text-zinc-300 transition-all hover:border-[#42ff5a]/30 hover:bg-[#42ff5a]/10 hover:text-[#42ff5a]" role="menuitem" style={{ fontFamily: PIXEL_FONT, fontSize: "0.60rem" }}>
-                          <FiUser className="size-3.5 text-[#42ff5a]/70 group-hover/item:text-[#42ff5a]" />
-                          <span>User Profile</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsAccountMenuOpen(false);
-                            void resolvedOnSignOut();
-                          }}
-                          className="group/item flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-xs font-medium text-red-400 transition-all hover:border-red-500/30 hover:bg-red-500/12 hover:text-red-300"
-                          role="menuitem"
-                          style={{ fontFamily: PIXEL_FONT, fontSize: "0.60rem" }}
-                        >
-                          <FiLogOut className="size-3.5 text-red-400/80 group-hover/item:text-red-300" />
-                          <span>Logout</span>
-                        </button>
-                      </div>
-                    </div>
-                  ) : null}
                 </div>
               ) : (
                 <Link
@@ -364,6 +330,46 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
             </button>
           </div>
         </div>
+
+        {/* Rendered beside the shell, not inside it: the shell clips its
+            overflow to the rounded outline, which would hide the menu. */}
+        {isAccountMenuOpen && resolvedUser ? (
+          <div className="absolute right-4 top-full z-50 mt-3 hidden w-64 rounded-2xl sm:right-8 lg:block border border-[#42ff5a]/30 bg-black/95 p-2 shadow-[0_24px_60px_rgba(0,0,0,0.85),0_0_30px_rgba(66,255,90,0.12)] backdrop-blur-2xl" role="menu">
+            <div className="rounded-xl border border-white/10 bg-white/[0.04] p-3">
+              <div className="flex items-center gap-3">
+                <Avatar src={resolvedUser.photoURL} alt={resolvedUser.displayName || "User"} name={resolvedUser.displayName} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center justify-between gap-1">
+                    <p className="truncate text-xs font-semibold text-white" style={{ fontFamily: PIXEL_FONT, fontSize: "0.62rem" }}>{resolvedUser.displayName || "User"}</p>
+                    <span className="rounded bg-[#42ff5a]/15 px-1.5 py-0.5 font-bold tracking-widest text-[#42ff5a] border border-[#42ff5a]/30" style={{ fontFamily: PIXEL_FONT, fontSize: "0.48rem" }}>ONLINE</span>
+                  </div>
+                  <p className="truncate text-zinc-400 mt-0.5" style={{ fontFamily: PIXEL_FONT, fontSize: "0.52rem" }}>{resolvedUser.email || "No email"}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-2 space-y-1">
+              <button type="button" className="group/item flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-xs font-medium text-zinc-300 transition-all hover:border-[#42ff5a]/30 hover:bg-[#42ff5a]/10 hover:text-[#42ff5a]" role="menuitem" style={{ fontFamily: PIXEL_FONT, fontSize: "0.60rem" }}>
+                <FiUser className="size-3.5 text-[#42ff5a]/70 group-hover/item:text-[#42ff5a]" />
+                <span>User Profile</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAccountMenuOpen(false);
+                  void resolvedOnSignOut();
+                }}
+                className="group/item flex w-full items-center gap-2.5 rounded-xl border border-transparent px-3 py-2 text-left text-xs font-medium text-red-400 transition-all hover:border-red-500/30 hover:bg-red-500/12 hover:text-red-300"
+                role="menuitem"
+                style={{ fontFamily: PIXEL_FONT, fontSize: "0.60rem" }}
+              >
+                <FiLogOut className="size-3.5 text-red-400/80 group-hover/item:text-red-300" />
+                <span>Logout</span>
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {isMenuOpen && (
             <nav
