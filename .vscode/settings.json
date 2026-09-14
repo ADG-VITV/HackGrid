@@ -1,4 +1,4 @@
 {
     "liveServer.settings.port": 5501,
-    "prisma.pinToPrisma6": true
+    "prisma.pinToPrisma6": false
 }
