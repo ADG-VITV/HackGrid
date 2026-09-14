@@ -2,7 +2,7 @@
  * Idempotent seed for the judging side of the event:
  *   - the event row itself (keyed, never duplicated),
  *   - the five official judging criteria (rows, not hard-coded columns),
- *   - one dev invitation code so a judge can reach the portal (single-use).
+ *   - one shared dev invitation code so judges can apply to the portal.
  *
  * Run with `npx prisma db seed`. Anything already present is left untouched.
  */

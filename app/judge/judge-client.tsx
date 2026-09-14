@@ -103,6 +103,8 @@ export function JudgeClient() {
   let entranceView: EntranceView;
   if (!user) {
     entranceView = { view: "signed_out" };
+  } else if (session?.result.status === "pending" && session.firebaseUid === user.uid) {
+    entranceView = { view: "pending", message: session.result.message };
   } else if (session?.result.status === "denied" && session.firebaseUid === user.uid) {
     entranceView = { view: "denied", message: session.result.message };
   } else {

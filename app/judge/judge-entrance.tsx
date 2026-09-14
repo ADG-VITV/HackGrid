@@ -3,6 +3,7 @@
 export type EntranceView =
   | { view: "signed_out" }
   | { view: "redeem" }
+  | { view: "pending"; message: string }
   | { view: "denied"; message: string }
   | { view: "active" };
 
@@ -39,8 +40,7 @@ export function JudgeEntrance({
           Sign in to review teams
         </h2>
         <p className="mt-1 text-sm leading-6 text-zinc-500">
-          Use the Google account you registered with as a judge, then redeem
-          your invitation code.
+          Sign in with Google, then submit your secret key for organiser approval.
         </p>
         <button
           type="button"
@@ -97,6 +97,24 @@ export function JudgeEntrance({
     );
   }
 
+  if (view.view === "pending") {
+    return (
+      <div className="mb-5 rounded-2xl border border-amber-500/30 bg-amber-500/[0.05] p-5">
+        <p className="text-[0.65rem] font-semibold uppercase tracking-[0.16em] text-amber-300">
+          Application pending
+        </p>
+        <p className="mt-1.5 text-sm leading-6 text-zinc-300">{view.message}</p>
+        <button
+          type="button"
+          onClick={onSignOut}
+          className="mt-4 rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-zinc-400 transition hover:border-[#42ff5a]/40 hover:text-[#42ff5a]"
+        >
+          Switch account
+        </button>
+      </div>
+    );
+  }
+
   // Redemption: signed in but no judge profile for this account yet.
   return (
     <div className="mb-5 rounded-2xl border border-white/10 bg-zinc-950 p-5">
@@ -137,7 +155,7 @@ export function JudgeEntrance({
       {message ? (
         <p
           className={`mt-3 rounded-lg border px-3 py-2 text-xs ${
-            message.startsWith("Invitation redeemed")
+            message.startsWith("Application sent")
               ? "border-[#42ff5a]/30 bg-[#42ff5a]/[0.06] text-[#42ff5a]"
               : "border-red-500/30 bg-red-500/10 text-red-200"
           }`}

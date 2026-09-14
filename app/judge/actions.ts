@@ -44,6 +44,7 @@ export type JudgeSessionView = {
 export type JudgeSessionResult =
   | { status: "signed_out" }
   | { status: "no_profile" }
+  | { status: "pending"; message: string }
   | { status: "denied"; message: string }
   | { status: "active"; message: string; session: JudgeSessionView };
 
@@ -241,11 +242,28 @@ export async function getJudgeSessionAction(
       return { status: "signed_out" };
     }
 
-    const judge = await prisma.judgeProfile.findUnique({
-      where: { firebaseUid },
-    });
+    const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid } });
 
     if (!judge) {
+      const application = await prisma.judgeApplication.findUnique({
+        where: { eventId_firebaseUid: { eventId: event.id, firebaseUid } },
+        select: { status: true },
+      });
+
+      if (application?.status === "PENDING") {
+        return {
+          status: "pending",
+          message: "Your judge application is awaiting an organiser decision.",
+        };
+      }
+
+      if (application?.status === "REJECTED") {
+        return {
+          status: "denied",
+          message: "Your judge application was not approved.",
+        };
+      }
+
       return { status: "no_profile" };
     }
 
@@ -286,10 +304,11 @@ export async function getJudgeSessionAction(
         maxTotal: criteria.reduce((sum, c) => sum + c.maxScore, 0),
       },
     };
-  } catch {
+  } catch (error) {
+    console.error("[judge] failed to resolve judging access", error);
     return {
       status: "denied",
-      message: "Could not check your judging access. Try again.",
+      message: "Could not check judging access because the server could not reach its data. Try again shortly.",
     };
   }
 }
@@ -333,13 +352,6 @@ export async function redeemJudgeInvitationAction(
       };
     }
 
-    if (invitation.usedAt) {
-      return {
-        status: "invalid",
-        message: "That invitation code has already been used.",
-      };
-    }
-
     if (invitation.expiresAt && invitation.expiresAt.getTime() < Date.now()) {
       return {
         status: "invalid",
@@ -348,67 +360,57 @@ export async function redeemJudgeInvitationAction(
     }
 
     await prisma.$transaction(async (tx) => {
-      const judge = await tx.judgeProfile.upsert({
-        where: { firebaseUid },
-        update: { name: name || undefined, email: email || undefined },
-        create: { firebaseUid, name: name || "Judge", email: email || `${firebaseUid}@judge.local` },
+      const existingApplication = await tx.judgeApplication.findUnique({
+        where: { eventId_firebaseUid: { eventId: event.id, firebaseUid } },
+        select: { status: true },
       });
 
-      const application = await tx.judgeApplication.upsert({
-        where: {
-          eventId_firebaseUid: { eventId: event.id, firebaseUid },
-        },
-        update: {
-          name: name || undefined,
-          email: email || undefined,
-          invitationId: invitation.id,
-          judgeId: judge.id,
-          status: "APPROVED",
-          reviewedAt: new Date(),
-        },
-        create: {
+      if (existingApplication?.status === "PENDING") {
+        throw new Error("APPLICATION_PENDING");
+      }
+      if (existingApplication?.status === "APPROVED") {
+        throw new Error("APPLICATION_APPROVED");
+      }
+      if (existingApplication?.status === "REJECTED") {
+        throw new Error("APPLICATION_REJECTED");
+      }
+
+      await tx.judgeApplication.create({
+        data: {
           eventId: event.id,
           invitationId: invitation.id,
           firebaseUid,
           name: name || "Judge",
           email: email || `${firebaseUid}@judge.local`,
-          status: "APPROVED",
-          reviewedAt: new Date(),
-          judgeId: judge.id,
+          status: "PENDING",
         },
       });
 
-      await tx.judgeEventAssignment.upsert({
-        where: {
-          judgeId_eventId: { judgeId: judge.id, eventId: event.id },
-        },
-        update: { status: "ACTIVE" },
-        create: {
-          judgeId: judge.id,
-          eventId: event.id,
-          status: "ACTIVE",
-        },
-      });
-
-      await tx.judgeInvitation.update({
-        where: { id: invitation.id },
-        data: { usedAt: new Date() },
-      });
-
-      return application;
     });
 
-    return { status: "success", message: "Invitation redeemed. You can now judge." };
+    return {
+      status: "success",
+      message: "Application sent. An organiser must approve it before you can judge.",
+    };
   } catch (error) {
+    if (error instanceof Error) {
+      const messages: Record<string, string> = {
+        APPLICATION_PENDING: "Your judge application is already awaiting review.",
+        APPLICATION_APPROVED: "Your judge application has already been approved.",
+        APPLICATION_REJECTED: "Your judge application was rejected and cannot be resubmitted.",
+      };
+      if (messages[error.message]) return { status: "invalid", message: messages[error.message] };
+    }
     if (
       error instanceof Prisma.PrismaClientKnownRequestError &&
       error.code === "P2002"
     ) {
       return {
         status: "invalid",
-        message: "That code has already been redeemed or this account is already registered.",
+        message: "This Google account already has a judge application for this event.",
       };
     }
+    console.error("[judge] failed to submit judge application", error);
     return databaseError();
   }
 }

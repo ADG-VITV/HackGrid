@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState, useTransition } from "react";
 import {
   getAdminContextAction,
+  getJudgeApplicationsAdminAction,
+  reviewJudgeApplicationAction,
   resetCapsuleAction,
   resetEventAdminAction,
   resetSubCapsuleAction,
@@ -10,6 +12,7 @@ import {
   startRoundAction,
   type AdminContext,
   type AdminReport,
+  type JudgeApplicationAdminView,
 } from "./actions";
 
 function statusTone(status: string) {
@@ -36,6 +39,7 @@ function podStatusLabel(status: string) {
 
 export function AdminClient() {
   const [context, setContext] = useState<AdminContext | null>(null);
+  const [judgeApplications, setJudgeApplications] = useState<JudgeApplicationAdminView[]>([]);
   const [message, setMessage] = useState<AdminReport | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -43,6 +47,9 @@ export function AdminClient() {
     void getAdminContextAction()
       .then(setContext)
       .catch(() => setMessage({ status: "error", message: "Could not load organiser state." }));
+    void getJudgeApplicationsAdminAction()
+      .then(setJudgeApplications)
+      .catch(() => setMessage({ status: "error", message: "Could not load judge applications." }));
   }, []);
 
   useEffect(() => {
@@ -152,6 +159,46 @@ export function AdminClient() {
           >
             Reset event
           </button>
+        </section>
+
+        <section className="mt-8 rounded-2xl border border-white/10 bg-zinc-950 p-5">
+          <div>
+            <p className="font-mono text-xs uppercase tracking-[0.2em] text-amber-400">Judge applications</p>
+            <p className="mt-2 text-sm text-zinc-400">
+              Validate each applicant&apos;s secret key request before granting their event assignment.
+            </p>
+          </div>
+          <div className="mt-4 overflow-x-auto">
+            <table className="w-full min-w-[40rem] text-left text-sm">
+              <thead className="border-b border-white/10 text-xs uppercase tracking-wide text-zinc-500">
+                <tr>
+                  <th className="pb-3 pr-4 font-medium">Applicant</th>
+                  <th className="pb-3 pr-4 font-medium">Submitted</th>
+                  <th className="pb-3 pr-4 font-medium">Status</th>
+                  <th className="pb-3 font-medium">Decision</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5 text-zinc-300">
+                {judgeApplications.length === 0 ? (
+                  <tr><td colSpan={4} className="py-5 text-zinc-500">No judge applications yet.</td></tr>
+                ) : judgeApplications.map((application) => (
+                  <tr key={application.id}>
+                    <td className="py-3 pr-4"><span className="block font-medium text-white">{application.name}</span><span className="font-mono text-xs text-zinc-500">{application.email}</span></td>
+                    <td className="py-3 pr-4 text-xs text-zinc-500">{new Date(application.submittedAt).toLocaleString()}</td>
+                    <td className="py-3 pr-4"><span className={`rounded-full border px-2 py-1 text-xs font-semibold ${application.status === "APPROVED" ? "border-neon/50 text-neon" : application.status === "REJECTED" ? "border-red-500/50 text-red-300" : "border-amber-500/40 text-amber-300"}`}>{application.status}</span></td>
+                    <td className="py-3">
+                      {application.status === "PENDING" ? (
+                        <div className="flex gap-2">
+                          <button type="button" disabled={pending} onClick={() => run(() => reviewJudgeApplicationAction(application.id, "APPROVED"))} className="rounded-lg border border-neon/50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-neon hover:bg-neon/10 disabled:opacity-40">Approve</button>
+                          <button type="button" disabled={pending} onClick={() => run(() => reviewJudgeApplicationAction(application.id, "REJECTED"))} className="rounded-lg border border-red-500/50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-red-300 hover:bg-red-500/10 disabled:opacity-40">Reject</button>
+                        </div>
+                      ) : <span className="text-xs text-zinc-600">Reviewed</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </section>
 
         <section className="mt-8 space-y-4">

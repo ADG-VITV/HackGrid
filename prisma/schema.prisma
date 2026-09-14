@@ -328,7 +328,7 @@ enum EvaluationStatus {
   SUBMITTED
 }
 
-/// A manually issued, single-use invitation code for one event. The submitted
+/// A manually issued shared judge-access code for one event. The submitted
 /// code is hashed before storage; it is never persisted in plain text.
 model JudgeInvitation {
   id        String   @id @default(cuid())
@@ -339,7 +339,7 @@ model JudgeInvitation {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
 
   event       Event             @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  application JudgeApplication?
+  applications JudgeApplication[]
 
   @@index([eventId])
   @@map("judge_invitations")
@@ -350,7 +350,7 @@ model JudgeInvitation {
 model JudgeApplication {
   id            String                 @id @default(cuid())
   eventId       String
-  invitationId  String                 @unique
+  invitationId  String
   firebaseUid   String                 @db.VarChar(128)
   name          String                 @db.VarChar(80)
   email         String                 @db.VarChar(254)
@@ -364,6 +364,7 @@ model JudgeApplication {
   judge      JudgeProfile?   @relation(fields: [judgeId], references: [id], onDelete: SetNull)
 
   @@unique([eventId, firebaseUid])
+  @@index([invitationId])
   @@index([status, submittedAt])
   @@index([judgeId])
   @@map("judge_applications")
