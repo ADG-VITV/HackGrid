@@ -47,7 +47,11 @@ let entryId = 0;
  * Reconnection, heartbeats and backoff are Socket.IO's job, so none of that
  * lives here.
  */
-export function useAuctionSocket(podId: string | null, teamId: string | null) {
+export function useAuctionSocket(
+  podId: string | null,
+  teamId: string | null,
+  email: string | null,
+) {
   const [connection, setConnection] = useState<ConnectionState>("idle");
   const [state, setState] = useState<RoomState | null>(null);
   const [entries, setEntries] = useState<ConsoleEntry[]>([]);
@@ -71,14 +75,14 @@ export function useAuctionSocket(podId: string | null, teamId: string | null) {
   const clearEntries = useCallback(() => setEntries([]), []);
 
   useEffect(() => {
-    if (!podId || !teamId) return;
+    if (!podId || !teamId || !email) return;
 
     // Identity travels in the handshake, where the server's io.use() gate
     // reads it, rather than in a query string.
     const socket: AuctionSocket = io({
       path: SOCKET_PATH,
       transports: ["websocket", "polling"],
-      auth: { podId, teamId },
+      auth: { podId, teamId, email },
     });
     socketRef.current = socket;
 
@@ -170,7 +174,7 @@ export function useAuctionSocket(podId: string | null, teamId: string | null) {
       setState(null);
       setFeedback(null);
     };
-  }, [podId, teamId, pushEntry]);
+  }, [podId, teamId, email, pushEntry]);
 
   /**
    * Send a bid and wait for the server's acknowledgement. The ack is the only
@@ -216,7 +220,7 @@ export function useAuctionSocket(podId: string | null, teamId: string | null) {
   // Between "we have a room to join" and Socket.IO's first connect event there
   // is no explicit state to set, so it is derived rather than assigned.
   const reportedConnection: ConnectionState =
-    podId && teamId && connection === "idle" ? "connecting" : connection;
+    podId && teamId && email && connection === "idle" ? "connecting" : connection;
 
   return {
     connection: reportedConnection,

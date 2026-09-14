@@ -1,32 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, useTransition } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { ChevronIcon } from "./auction-icon";
 import { ExpandedWorkspace } from "./expanded-workspace";
-import { ActAsBar } from "./act-as-bar";
-import { DevConsole } from "./dev-console";
+import { IdentityBar } from "./identity-bar";
+import { MemberView } from "./member-view";
 import { ResourceManager } from "./resource-manager";
-import { SecondView } from "./second-view";
 import { auctionTiles } from "./auction-data";
-import {
-  getBiddingContextAction,
-  listTeamsAction,
-  resetEventAction,
-  startCapsuleAction,
-  startEventAction,
-  type BiddingContext,
-  type TeamOption,
-} from "./actions";
-import {
-  secondsUntil,
-  useAuctionSocket,
-  useSecondTick,
-  type ConsoleEntry,
-} from "./use-auction-socket";
+import { useViewer } from "@/lib/use-viewer";
+import { getBiddingContextAction, type BiddingContext } from "./actions";
+import { secondsUntil, useAuctionSocket, useSecondTick } from "./use-auction-socket";
 
-const IS_DEV = process.env.NODE_ENV === "development";
-const ACT_AS_KEY = "hackgrid:actAsTeamId";
-const EMAIL_KEYS = ["hackgrid:gmail", "hackgrid:userEmail", "email"];
+/** How often a member's watch view re-reads the database while a round is live. */
+const MEMBER_LIVE_POLL_MS = 4_000;
+/** Polling between rounds, for everyone who has no room to sit in. */
+const IDLE_POLL_MS = 10_000;
 
 function formatTimerDisplay(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -34,18 +22,12 @@ function formatTimerDisplay(seconds: number) {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
-function readStoredEmail() {
-  for (const key of EMAIL_KEYS) {
-    const value = window.localStorage.getItem(key);
-    if (value && value.includes("@")) return value;
-  }
-  return "";
-}
-
 const emptyContext: BiddingContext = {
   status: "success",
   message: "",
   team: null,
+  viewerRole: null,
+  currentLot: null,
   resources: null,
   capsules: auctionTiles.map((tile, index) => ({
     key: tile.id,
@@ -60,76 +42,46 @@ const emptyContext: BiddingContext = {
   })),
 };
 
+/**
+ * The auction as a team sees it. Organiser controls — starting the event,
+ * forcing a round, resetting — live on /admin; nothing here can change the
+ * event's state, only bid in it.
+ */
 export function BiddingClient() {
-  const [teams, setTeams] = useState<TeamOption[]>([]);
-  const [teamId, setTeamId] = useState<string | null>(null);
-  const [context, setContext] = useState<BiddingContext>(emptyContext);
-  const [localLog, setLocalLog] = useState<ConsoleEntry[]>([]);
+  const [fetched, setFetched] = useState<{ identity: string; context: BiddingContext }>({
+    identity: "",
+    context: emptyContext,
+  });
   const [expanded, setExpanded] = useState(true);
-  const [pending, startTransition] = useTransition();
 
   useSecondTick();
 
-  const pushLocal = useCallback((level: ConsoleEntry["level"], message: string) => {
-    setLocalLog((previous) =>
-      [
-        ...previous,
-        { id: Date.now() + Math.random(), at: new Date().toISOString(), level, message },
-      ].slice(-100),
-    );
-  }, []);
-
   // ---------------------------------------------------------------- identity
 
-  // Pod seats change every round, so the dev roster is re-read whenever pods
-  // are (re)drawn, not just on first load.
-  const refreshTeams = useCallback(() => {
-    if (!IS_DEV) return;
-    listTeamsAction().then(setTeams).catch(() => undefined);
-  }, []);
+  // The viewer is whoever signed in with Google; the server works out from
+  // that email whether they lead their team or merely belong to it.
+  const viewer = useViewer();
+  const identity = viewer.email || null;
 
-  useEffect(() => {
-    refreshTeams();
-  }, [refreshTeams]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function resolveIdentity() {
-      const stored = IS_DEV ? window.localStorage.getItem(ACT_AS_KEY) : null;
-      if (stored) {
-        if (!cancelled) setTeamId(stored);
-        return;
-      }
-      const email = readStoredEmail();
-      if (!email) return;
-      const result = await getBiddingContextAction(email).catch(() => null);
-      if (!cancelled && result?.team) setTeamId(String(result.team.id));
-    }
-
-    void resolveIdentity();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const refreshContext = useCallback((id: string | null) => {
-    getBiddingContextAction(id ?? "")
-      .then(setContext)
+  const refreshContext = useCallback(() => {
+    if (!identity) return;
+    getBiddingContextAction(identity)
+      .then((context) => setFetched({ identity, context }))
       .catch(() => undefined);
-  }, []);
+  }, [identity]);
 
   useEffect(() => {
-    refreshContext(teamId);
-  }, [teamId, refreshContext]);
+    refreshContext();
+  }, [refreshContext]);
 
-  function selectTeam(next: string) {
-    setTeamId(next || null);
-    if (IS_DEV) {
-      if (next) window.localStorage.setItem(ACT_AS_KEY, next);
-      else window.localStorage.removeItem(ACT_AS_KEY);
-    }
-  }
+  // A context fetched for one identity must not linger once it changes — a
+  // sign-out drops straight back to the empty shell.
+  const context = identity && fetched.identity === identity ? fetched.context : emptyContext;
+
+  const teamId = context.team ? String(context.team.id) : null;
+  // Only the lead bids (rulebook 8). A member gets the read-only view and
+  // never opens a socket — a second seat in the room would count for quorum.
+  const isMember = context.viewerRole === "MEMBER";
 
   // ------------------------------------------------------------------ socket
 
@@ -137,56 +89,42 @@ export function BiddingClient() {
   // The server keeps exactly one capsule live; if it ever reports more, the
   // one furthest along the running order is the current round.
   const liveCapsule = context.capsules.findLast((capsule) => capsule.status === "LIVE") ?? null;
-  const activePodId = liveCapsule?.podId ?? null;
+  const activePodId = isMember ? null : (liveCapsule?.podId ?? null);
 
-  const { connection, state: room, entries, feedback, clockSkew, placeBid, clearEntries, lastEvent } =
-    useAuctionSocket(activePodId, teamId);
+  // The hub seats the lead's email only.
+  const socketEmail = isMember ? null : identity;
+
+  const { connection, state: room, feedback, clockSkew, placeBid, lastEvent } = useAuctionSocket(
+    activePodId,
+    teamId,
+    socketEmail,
+  );
 
   // A round ending, or the next one opening, changes which room this client
   // belongs to — so re-read the context whenever the server says so.
+  // Settlements land in the Resource Manager, so a closing lot refreshes too.
   useEffect(() => {
     if (!lastEvent) return;
-    if (
-      lastEvent.type === "CAPSULE_OPENED" ||
-      lastEvent.type === "CAPSULE_CLOSED" ||
-      lastEvent.type === "EVENT_COMPLETE"
-    ) {
-      refreshContext(teamId);
-      refreshTeams();
-    }
-  }, [lastEvent, teamId, refreshContext, refreshTeams]);
+    refreshContext();
+  }, [lastEvent, refreshContext]);
 
-  // Settlements land in the Resource Manager, so refresh it when a lot closes.
+  // With no socket there is no push: between rounds nobody has a room, and a
+  // member never does. Poll instead — quickly while a member is following a
+  // live round, gently otherwise. Once a lead's room is open the socket does
+  // the work.
+  const isLive = Boolean(liveCapsule);
   useEffect(() => {
-    if (lastEvent?.type === "LOT_CLOSED") refreshContext(teamId);
-  }, [lastEvent, teamId, refreshContext]);
-
-  // Between rounds there is no room to be in, so no push can arrive — a team
-  // sitting on the page would never see the next round open. Poll gently, and
-  // only while disconnected; once the room is live the socket does the work.
-  useEffect(() => {
-    if (connection === "open") return;
-    const id = setInterval(() => refreshContext(teamId), 10_000);
+    if (!isMember && connection === "open") return;
+    const ms = isMember && isLive ? MEMBER_LIVE_POLL_MS : IDLE_POLL_MS;
+    const id = setInterval(refreshContext, ms);
     return () => clearInterval(id);
-  }, [connection, teamId, refreshContext]);
-
-  const consoleEntries = useMemo(
-    () => [...localLog, ...entries].sort((a, b) => a.at.localeCompare(b.at)),
-    [localLog, entries],
-  );
-
-  // ------------------------------------------------------------- dev actions
-
-  function runDevAction(label: string, fn: () => Promise<{ status: string; message: string }>) {
-    startTransition(async () => {
-      const report = await fn();
-      pushLocal(report.status === "error" ? "error" : "success", `${label}: ${report.message}`);
-      refreshContext(teamId);
-      refreshTeams();
-    });
-  }
+  }, [isMember, isLive, connection, refreshContext]);
 
   // --------------------------------------------------------------------- ui
+
+  if (isMember) {
+    return <MemberView context={context} polling={isLive} />;
+  }
 
   const eventStarted = context.capsules.some((capsule) => capsule.status !== "PENDING");
   const eventComplete =
@@ -196,16 +134,16 @@ export function BiddingClient() {
   const secondsLeft = secondsUntil(activeLot?.closesAt ?? null, clockSkew);
 
   function workspaceMessage(): string | null {
-    if (!teamId) return "Pick a team above to join its pod room.";
+    if (!teamId) {
+      return "Sign in with your team's email to join its pod room.";
+    }
     if (!liveCapsule) {
       return eventComplete
         ? "Every round is finished. Your final product spec is in the Resource Manager."
-        : IS_DEV
-          ? "No round is live. Hit Start event to prepare every round's pods, then open one from /admin or with Force here. Nothing opens on its own."
-          : "The auction has not started yet. This page will come alive when the first round opens.";
+        : "The auction has not started yet. This page will come alive when the first round opens.";
     }
     if (!liveCapsule.podId) {
-      return `${liveCapsule.name} is running, but your team was not seated in a pod for it.`;
+      return `${liveCapsule.name} is running, but your team was not placed in a pod for it.`;
     }
     return null;
   }
@@ -213,43 +151,12 @@ export function BiddingClient() {
   return (
     <main className="flex min-h-dvh flex-col overflow-x-hidden bg-black p-4 pt-20 text-zinc-100 sm:p-[3%] sm:pt-24">
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4">
-        <ActAsBar
-          isDev={IS_DEV}
-          teams={teams}
-          activeTeamId={teamId}
-          onSelectTeam={selectTeam}
+        <IdentityBar
           teamLabel={context.team ? `${context.team.name} · ${context.team.code}` : null}
           podLabel={room?.pod.label ?? liveCapsule?.podLabel ?? null}
           connection={connection}
           balance={context.resources?.remaining ?? null}
         />
-
-        {IS_DEV ? (
-          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-amber-500/25 bg-amber-500/[0.04] px-4 py-2.5">
-            <span className="font-mono text-[0.6rem] tracking-[0.14em] text-amber-500/80 uppercase">
-              Organiser
-            </span>
-            <button
-              type="button"
-              onClick={() => runDevAction("Start event", startEventAction)}
-              disabled={pending || Boolean(liveCapsule)}
-              className="rounded-lg border border-neon/50 bg-neon/10 px-4 py-1.5 text-xs font-semibold tracking-wide text-neon uppercase transition hover:bg-neon/20 disabled:cursor-not-allowed disabled:opacity-30"
-            >
-              Start event
-            </button>
-            <button
-              type="button"
-              onClick={() => runDevAction("Reset", resetEventAction)}
-              disabled={pending}
-              className="rounded-lg border border-red-500/40 px-3 py-1.5 text-xs font-semibold tracking-wide text-red-400 uppercase transition hover:bg-red-500/10 disabled:opacity-30"
-            >
-              Reset event
-            </button>
-            <span className="text-[0.62rem] text-zinc-600">
-              Start event prepares all {auctionTiles.length} rounds and locks in their pods; it opens nothing. Force opens a round out of order, closing whichever was live.
-            </span>
-          </div>
-        ) : null}
 
         <section className="flex min-h-0 flex-1 flex-col gap-[2.5%] lg:flex-row">
           <div className="flex min-h-0 flex-1 flex-col gap-[2%] self-start rounded-[2.5rem] border border-neon/20 bg-black p-[1.5%] shadow-[0_0_80px_rgba(66,255,90,0.06)] lg:w-[74%]">
@@ -327,21 +234,6 @@ export function BiddingClient() {
                         </span>
                       </button>
 
-                      {IS_DEV && !isLive ? (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            runDevAction(`Force ${capsule.name}`, () =>
-                              startCapsuleAction(capsule.key),
-                            )
-                          }
-                          disabled={pending}
-                          className="shrink-0 rounded-lg border border-amber-500/40 px-3 py-1.5 text-[0.6rem] font-semibold tracking-wide text-amber-400/90 uppercase transition hover:bg-amber-500/10 disabled:opacity-30"
-                        >
-                          Force
-                        </button>
-                      ) : null}
-
                       {isLive ? (
                         <button
                           type="button"
@@ -394,21 +286,9 @@ export function BiddingClient() {
               resources={context.resources}
               capsules={context.capsules}
               identityHint={
-                teamId ? null : "Pick a team above to see what it owns."
+                teamId ? null : "Sign in with your roster email to see what your team owns."
               }
             />
-
-            {IS_DEV ? <SecondView teams={teams} /> : null}
-
-            {IS_DEV ? (
-              <DevConsole
-                entries={consoleEntries}
-                onClear={() => {
-                  clearEntries();
-                  setLocalLog([]);
-                }}
-              />
-            ) : null}
           </aside>
         </section>
 

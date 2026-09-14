@@ -1,7 +1,6 @@
 "use client";
 
 import type { ConnectionState } from "./use-auction-socket";
-import type { TeamOption } from "./actions";
 import { Credits } from "./credits";
 
 const connectionCopy: Record<ConnectionState, { label: string; className: string }> = {
@@ -13,24 +12,15 @@ const connectionCopy: Record<ConnectionState, { label: string; className: string
 };
 
 /**
- * Identity strip. In production the team comes from the signed-in email; in
- * development you can act as any team so several tabs can bid against each
- * other in one pod.
+ * Identity strip: the room connection, the signed-in team, its pod this
+ * round, and what it has left to spend.
  */
-export function ActAsBar({
-  isDev,
-  teams,
-  activeTeamId,
-  onSelectTeam,
+export function IdentityBar({
   teamLabel,
   podLabel,
   connection,
   balance,
 }: {
-  isDev: boolean;
-  teams: TeamOption[];
-  activeTeamId: string | null;
-  onSelectTeam: (teamId: string) => void;
   teamLabel: string | null;
   podLabel: string | null;
   connection: ConnectionState;
@@ -46,26 +36,7 @@ export function ActAsBar({
         {status.label}
       </span>
 
-      {isDev ? (
-        <label className="flex items-center gap-2 text-xs text-zinc-400">
-          <span className="tracking-wide uppercase">Acting as</span>
-          <select
-            value={activeTeamId ?? ""}
-            onChange={(event) => onSelectTeam(event.target.value)}
-            className="h-9 min-w-56 rounded-lg border border-neon/30 bg-black px-3 text-sm text-zinc-100 outline-none transition focus:border-neon/70"
-          >
-            <option value="">Select a team…</option>
-            {teams.map((team) => (
-              <option key={team.id} value={String(team.id)}>
-                {team.name} · {team.code}
-                {team.podLabel ? ` · ${team.podLabel}` : ""}
-              </option>
-            ))}
-          </select>
-        </label>
-      ) : (
-        <span className="text-sm text-zinc-300">{teamLabel ?? "Not signed in"}</span>
-      )}
+      <span className="text-sm text-zinc-300">{teamLabel ?? "Not signed in"}</span>
 
       {podLabel ? (
         <span className="rounded-md border border-neon/25 bg-neon/[0.06] px-2.5 py-1 font-mono text-[0.65rem] text-neon">

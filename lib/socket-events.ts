@@ -124,4 +124,6 @@ export type ClientToServerEvents = {
 export type SocketAuth = {
   podId: string;
   teamId: number;
+  /** The signed-in email; the hub seats it only if it is the team lead. */
+  email: string;
 };

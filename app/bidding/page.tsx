@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { Navbar } from "@/components/ui/Navbar";
 import { BiddingClient } from "./bidding-client";
 
 export const metadata: Metadata = {
@@ -8,10 +7,5 @@ export const metadata: Metadata = {
 };
 
 export default function BiddingPage() {
-  return (
-    <>
-      <Navbar />
-      <BiddingClient />
-    </>
-  );
+  return <BiddingClient />;
 }

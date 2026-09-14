@@ -10,18 +10,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { auctionTiles } from "@/lib/auction-catalog.mjs";
-import {
-  getBiddingContext,
-  liveCapsule,
-  resetEvent,
-  startEvent,
-  startCapsule,
-} from "@/lib/auction-engine.mjs";
-
-export type StartReport = {
-  status: "success" | "error";
-  message: string;
-};
+import { getBiddingContext } from "@/lib/auction-engine.mjs";
 
 export type CapsuleContext = {
   key: string;
@@ -64,27 +53,25 @@ export type TeamResources = {
   owned: OwnedResource[];
 };
 
+export type ViewerRole = "LEADER" | "MEMBER";
+
+export type CurrentLot = {
+  name: string;
+  tierRank: number;
+  closesAt: string | null;
+};
+
 export type BiddingContext = {
   status: "success" | "error";
   message: string;
-  team: { id: number; name: string; code: string; leadEmail: string } | null;
+  team: { id: number; name: string; code: string; leadName: string; leadEmail: string } | null;
+  /** Who asked: the lead bids, a member watches. Null without a team. */
+  viewerRole: ViewerRole | null;
+  /** The tier open in this team's pod right now — what the lead is bidding on. */
+  currentLot: CurrentLot | null;
   capsules: CapsuleContext[];
   resources: TeamResources | null;
 };
-
-export type TeamOption = {
-  id: number;
-  name: string;
-  code: string;
-  leadEmail: string;
-  /** Where this team sits in the round that is live, if any. */
-  podLabel: string | null;
-  podKind: "MAIN" | "REMAINDER" | null;
-};
-
-function isDev() {
-  return process.env.NODE_ENV === "development";
-}
 
 const capsuleShell = (): CapsuleContext[] =>
   auctionTiles.map((tile, index) => ({
@@ -99,28 +86,6 @@ const capsuleShell = (): CapsuleContext[] =>
     podKind: null,
   }));
 
-type Hub = {
-  onCapsuleStarted?: (id: string) => Promise<void>;
-  announceCapsuleStarted?: (id: string) => Promise<void>;
-  onEventReset?: () => void;
-};
-
-async function notifyHub(capsuleId: string) {
-  const hub = (globalThis as { __hackgridAuctionHub?: Hub }).__hackgridAuctionHub;
-  if (hub?.announceCapsuleStarted) {
-    await hub.announceCapsuleStarted(capsuleId).catch(() => undefined);
-    return;
-  }
-  if (hub?.onCapsuleStarted) {
-    await hub.onCapsuleStarted(capsuleId).catch(() => undefined);
-  }
-}
-
-function notifyReset() {
-  const hub = (globalThis as { __hackgridAuctionHub?: Hub }).__hackgridAuctionHub;
-  hub?.onEventReset?.();
-}
-
 export async function getBiddingContextAction(teamIdOrEmail: string): Promise<BiddingContext> {
   try {
     if (!process.env.DATABASE_URL) {
@@ -128,6 +93,8 @@ export async function getBiddingContextAction(teamIdOrEmail: string): Promise<Bi
         status: "error",
         message: "DATABASE_URL is not set.",
         team: null,
+        viewerRole: null,
+        currentLot: null,
         capsules: capsuleShell(),
         resources: null,
       };
@@ -139,102 +106,10 @@ export async function getBiddingContextAction(teamIdOrEmail: string): Promise<Bi
       status: "error",
       message: "Database request failed.",
       team: null,
+      viewerRole: null,
+      currentLot: null,
       capsules: capsuleShell(),
       resources: null,
     };
-  }
-}
-
-/** Prepare every round and freeze pod assignments for the full event. */
-export async function startEventAction(): Promise<StartReport> {
-  if (!isDev()) {
-    return { status: "error", message: "Starting the event is an organiser control." };
-  }
-
-  try {
-    const report = await startEvent(prisma);
-    if (report.status !== "success") return { status: "error", message: report.message };
-    return { status: "success", message: report.message };
-  } catch (error) {
-    console.error("startEventAction failed:", error);
-    return { status: "error", message: "Could not start the event." };
-  }
-}
-
-/** Force one round open, ignoring the running order. Development only. */
-export async function startCapsuleAction(capsuleKey: string): Promise<StartReport> {
-  if (!isDev()) {
-    return { status: "error", message: "Start is a development-mode control." };
-  }
-
-  try {
-    const report = await startCapsule(prisma, capsuleKey, { force: true });
-    if (report.status !== "success") return { status: "error", message: report.message };
-    await notifyHub(report.capsuleId);
-    return { status: "success", message: report.message };
-  } catch (error) {
-    console.error("startCapsuleAction failed:", error);
-    return { status: "error", message: "Could not start the capsule." };
-  }
-}
-
-/** Wipe every pod, lot, bid and settlement for the whole event. Development only. */
-export async function resetEventAction(): Promise<StartReport> {
-  if (!isDev()) {
-    return { status: "error", message: "Reset is a development-mode control." };
-  }
-
-  try {
-    const { removed } = await resetEvent(prisma);
-    notifyReset();
-    return {
-      status: "success",
-      message: `Removed ${removed} pod(s) with their lots, bids and settlements. Every capsule is back to pending.`,
-    };
-  } catch (error) {
-    console.error("resetEventAction failed:", error);
-    return { status: "error", message: "Could not reset the event." };
-  }
-}
-
-/**
- * Dev-only "act as" picker source. Each team carries its seat in the live
- * round, so the picker can show who is in the lucky/remainder pod and the second
- * view can default to one of them.
- */
-export async function listTeamsAction(): Promise<TeamOption[]> {
-  if (!isDev() || !process.env.DATABASE_URL) return [];
-
-  try {
-    const live = await liveCapsule(prisma);
-
-    const [teams, memberships] = await Promise.all([
-      prisma.team.findMany({
-        orderBy: { id: "asc" },
-        relationLoadStrategy: "join",
-        include: { leader: true },
-      }),
-      live
-        ? prisma.podMembership.findMany({
-            where: { capsuleId: live.id },
-            relationLoadStrategy: "join",
-            select: { teamId: true, pod: { select: { label: true, kind: true } } },
-          })
-        : Promise.resolve([]),
-    ]);
-
-    const seat = new Map(memberships.map((m) => [m.teamId, m.pod]));
-
-    return teams.map((team) => ({
-      id: team.id,
-      name: team.name,
-      code: team.code,
-      leadEmail: team.leader.email,
-      podLabel: seat.get(team.id)?.label ?? null,
-      podKind: seat.get(team.id)?.kind ?? null,
-    }));
-  } catch (error) {
-    console.error("listTeamsAction failed:", error);
-    return [];
   }
 }
