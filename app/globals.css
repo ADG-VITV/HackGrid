@@ -1,10 +1,38 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Silkscreen:wght@400;700&family=Pixelify+Sans:wght@400..700&display=swap');
 @import "tailwindcss";
+
+@font-face {
+  font-family: 'GeistPixelSquare';
+  src: url('/fonts/geist-pixel/GeistPixel-Square.woff2') format('woff2');
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'GeistPixelGrid';
+  src: url('/fonts/geist-pixel/GeistPixel-Grid.woff2') format('woff2');
+  font-display: swap;
+}
 
 :root {
   --background: #ffffff;
   --foreground: #171717;
   /* The one accent colour. The hero and login page already read this. */
   --neon: #42ff5a;
+  --font-geist-pixel: 'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
+  --font-geist-pixel-square: 'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
+}
+
+.font-pixel,
+[data-hero-navbar],
+[data-hero-navbar] *,
+[data-hero-navbar] a,
+[data-hero-navbar] a *,
+[data-hero-navbar] button,
+[data-hero-navbar] span,
+[data-hero-navbar] p,
+[data-hero-navbar] ::before,
+[data-hero-navbar] ::after {
+  font-family: 'Silkscreen', 'Press Start 2P', 'Pixelify Sans', 'GeistPixelSquare', monospace !important;
 }
 
 @theme inline {
@@ -13,6 +41,7 @@
   --color-neon: var(--neon);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-pixel: 'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
 }
 
 /* The flip clock's glow, so any neon headline can carry the same light. */
