@@ -49,6 +49,14 @@ export function AdminClient() {
     reload();
   }, [reload]);
 
+  // No socket on this page, so team presence would otherwise only move on a
+  // manual Refresh. Poll at the same gentle cadence the bidding page uses
+  // between rounds.
+  useEffect(() => {
+    const id = setInterval(reload, 10_000);
+    return () => clearInterval(id);
+  }, [reload]);
+
   function run(action: () => Promise<AdminReport>) {
     startTransition(async () => {
       const report = await action();
@@ -237,10 +245,22 @@ export function AdminClient() {
                               <p className="text-sm font-semibold text-white">
                                 {pod.label} <span className="font-normal text-zinc-500">· {pod.kind}</span>
                               </p>
-                              <p className="mt-1 text-xs text-zinc-500">
-                                {pod.activeItemName
-                                  ? `Auctioning: ${pod.activeItemName}`
-                                  : `${pod.settledLots}/${pod.lotCount} lots settled`}
+                              <p className="mt-1 flex flex-wrap items-center gap-x-1.5 text-xs text-zinc-500">
+                                <span
+                                  className={`size-1.5 shrink-0 rounded-full ${
+                                    pod.onlineCount > 0 ? "bg-neon" : "bg-zinc-700"
+                                  }`}
+                                  aria-hidden
+                                />
+                                <span className={pod.onlineCount > 0 ? "text-neon" : undefined}>
+                                  {pod.onlineCount} of {pod.teams.length} online
+                                </span>
+                                <span>·</span>
+                                <span>
+                                  {pod.activeItemName
+                                    ? `Auctioning: ${pod.activeItemName}`
+                                    : `${pod.settledLots}/${pod.lotCount} lots settled`}
+                                </span>
                               </p>
                             </div>
                             <span className={`rounded-full border px-2.5 py-1 text-xs font-semibold ${podStatusTone(pod.auctionStatus)}`}>
@@ -249,12 +269,13 @@ export function AdminClient() {
                           </div>
                         </summary>
                         <div className="mt-4 overflow-x-auto border-t border-white/5 pt-3">
-                          <table className="w-full min-w-[34rem] text-left text-xs">
+                          <table className="w-full min-w-[44rem] text-left text-xs">
                             <thead className="text-zinc-500">
                               <tr>
                                 <th className="pb-2 pr-3 font-medium">Seat</th>
                                 <th className="pb-2 pr-3 font-medium">Team</th>
                                 <th className="pb-2 pr-3 font-medium">Code</th>
+                                <th className="pb-2 pr-3 font-medium">Team leader</th>
                                 <th className="pb-2 font-medium">Round item</th>
                               </tr>
                             </thead>
@@ -262,8 +283,24 @@ export function AdminClient() {
                               {pod.teams.map((team) => (
                                 <tr key={team.id}>
                                   <td className="py-2.5 pr-3 font-mono text-zinc-500">{team.seat}</td>
-                                  <td className="py-2.5 pr-3 font-medium text-white">{team.name}</td>
+                                  <td className="py-2.5 pr-3 font-medium text-white">
+                                    <span className="flex items-center gap-2">
+                                      <span
+                                        className={`size-1.5 shrink-0 rounded-full ${
+                                          team.online ? "bg-neon" : "bg-zinc-700"
+                                        }`}
+                                        aria-label={team.online ? "online" : "offline"}
+                                      />
+                                      <span>{team.name}</span>
+                                    </span>
+                                  </td>
                                   <td className="py-2.5 pr-3 font-mono text-zinc-500">{team.code}</td>
+                                  <td className="py-2.5 pr-3">
+                                    <span className="block text-zinc-200">{team.leadName}</span>
+                                    <span className="block font-mono text-[0.65rem] text-zinc-500">
+                                      {team.leadEmail}
+                                    </span>
+                                  </td>
                                   <td className="py-2.5">
                                     {team.item ? (
                                       <span>
