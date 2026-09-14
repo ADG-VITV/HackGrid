@@ -7,8 +7,11 @@ import {
   IconInstagram,
   IconLinkedIn,
   IconX,
+  IconDiscord,
   IconEmail,
 } from './FooterIcons';
+
+const DISCORD_SERVER_URL = 'https://discord.gg/5c9MKm5Sd';
 
 export default function Footer(): React.JSX.Element {
   const scrollToTop = (): void => {
@@ -141,6 +144,15 @@ export default function Footer(): React.JSX.Element {
               className="text-neutral-400 transition-all duration-200 hover:-translate-y-0.5 hover:text-[#42ff5a]"
             >
               <IconX className="h-5 w-5" />
+            </a>
+            <a
+              href={DISCORD_SERVER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Discord"
+              className="text-neutral-400 transition-all duration-200 hover:-translate-y-0.5 hover:text-[#42ff5a]"
+            >
+              <IconDiscord className="h-5 w-5" />
             </a>
             <a
               href="mailto:ios@vit.ac.in"
