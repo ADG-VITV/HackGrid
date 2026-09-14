@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import Swal from "sweetalert2";
 import {
   getAuctionTeamForEmailAction,
   submitAuctionTeamAction,
@@ -297,9 +298,28 @@ export function AuctionTeamClient() {
     }
   }, []);
 
-  if (actionState.team && actionState !== currentTeamState) {
-    setCurrentTeamState(actionState);
-  }
+  useEffect(() => {
+    if (actionState.team) {
+      setCurrentTeamState(actionState);
+    }
+  }, [actionState]);
+
+  useEffect(() => {
+    if (actionState.alert !== "ALREADY_IN_TEAM") {
+      return;
+    }
+
+    setOpenForm(null);
+    void Swal.fire({
+      icon: "warning",
+      title: "Already in a team",
+      text: actionState.message,
+      confirmButtonText: "View my team",
+      confirmButtonColor: "#34d399",
+      background: "#09090b",
+      color: "#f4f4f5",
+    });
+  }, [actionState]);
 
   const statusTone = useMemo(() => {
     if (actionState.status === "error") {

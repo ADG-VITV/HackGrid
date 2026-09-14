@@ -23,6 +23,7 @@ export type TeamView = {
 export type AuctionTeamState = {
   status: "idle" | "success" | "error";
   message: string;
+  alert?: "ALREADY_IN_TEAM";
   viewerRole?: "LEADER" | "MEMBER";
   team?: TeamView;
 };
@@ -79,6 +80,19 @@ function toTeamView(team: TeamWithMembers): TeamView {
       role: member.userId === team.leaderId ? "LEADER" : "MEMBER",
       joinOrder: member.joinOrder,
     })),
+  };
+}
+
+function alreadyInTeamState(team: TeamWithMembers, email: string): AuctionTeamState {
+  const view = toTeamView(team);
+  const member = view.members.find((candidate) => candidate.email === email);
+
+  return {
+    status: "error",
+    alert: "ALREADY_IN_TEAM",
+    message: `You are already in ${view.name}. You can only belong to one team.`,
+    viewerRole: member?.role ?? "MEMBER",
+    team: view,
   };
 }
 
@@ -226,7 +240,7 @@ async function createTeam(formData: FormData): Promise<AuctionTeamState> {
   const existing = await findTeamForEmail(email);
 
   if (existing) {
-    return validationError("That email is already in a team.");
+    return alreadyInTeamState(existing, email);
   }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -262,10 +276,17 @@ async function createTeam(formData: FormData): Promise<AuctionTeamState> {
     } catch (error) {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
-        error.code === "P2002" &&
-        attempt < 4
+        error.code === "P2002"
       ) {
-        continue;
+        const existing = await findTeamForEmail(email);
+
+        if (existing) {
+          return alreadyInTeamState(existing, email);
+        }
+
+        if (attempt < 4) {
+          continue;
+        }
       }
 
       throw error;
@@ -308,13 +329,7 @@ async function joinTeam(formData: FormData): Promise<AuctionTeamState> {
   const alreadyIn = existingTeam.members.find((member) => member.user.email === email);
 
   if (alreadyIn) {
-    const view = toTeamView(existingTeam);
-    return {
-      status: "success",
-      message: "You are already in this team.",
-      viewerRole: alreadyIn.userId === existingTeam.leaderId ? "LEADER" : "MEMBER",
-      team: view,
-    };
+    return alreadyInTeamState(existingTeam, email);
   }
 
   if (existingTeam.members.length >= maxTeamMembers) {
@@ -324,7 +339,7 @@ async function joinTeam(formData: FormData): Promise<AuctionTeamState> {
   const elsewhere = await findTeamForEmail(email);
 
   if (elsewhere) {
-    return validationError("That email is already in another team.");
+    return alreadyInTeamState(elsewhere, email);
   }
 
   const nextJoinOrder =
@@ -371,6 +386,18 @@ export async function submitAuctionTeamAction(
 
     return validationError("Choose whether you want to create or join a team.");
   } catch (error) {
+    // The database enforces one membership per user. If two forms are submitted
+    // concurrently, turn that unique-constraint result into the same UI state as
+    // the normal pre-flight check.
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const email = normalizeEmail(field(formData, "email"));
+      const existing = isEmail(email) ? await findTeamForEmail(email) : null;
+
+      if (existing) {
+        return alreadyInTeamState(existing, email);
+      }
+    }
+
     return databaseError(error);
   }
 }
