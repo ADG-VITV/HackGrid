@@ -284,11 +284,10 @@ export function AuctionTeamClient() {
 
   useEffect(() => {
     const email = readStoredEmail();
-    setJoinEmail(email);
-    setCreateEmail(email);
-
     if (email) {
       startLookupTransition(async () => {
+        setJoinEmail(email);
+        setCreateEmail(email);
         const nextState = await getAuctionTeamForEmailAction(email);
 
         if (nextState.team) {
@@ -298,11 +297,9 @@ export function AuctionTeamClient() {
     }
   }, []);
 
-  useEffect(() => {
-    if (actionState.team) {
-      setCurrentTeamState(actionState);
-    }
-  }, [actionState]);
+  if (actionState.team && actionState !== currentTeamState) {
+    setCurrentTeamState(actionState);
+  }
 
   const statusTone = useMemo(() => {
     if (actionState.status === "error") {

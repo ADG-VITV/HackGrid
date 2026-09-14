@@ -43,11 +43,12 @@ model Team {
   leader  User         @relation(fields: [leaderId], references: [id])
   members TeamMember[]
 
-  eventId        String?
-  event          Event?          @relation(fields: [eventId], references: [id])
-  podMemberships PodMembership[]
-  bids           Bid[]
-  settlements    Settlement[]
+  eventId            String?
+  event              Event?            @relation(fields: [eventId], references: [id])
+  podMemberships     PodMembership[]
+  bids               Bid[]
+  settlements        Settlement[]
+  judgeEvaluations   JudgeEvaluation[]
 
   @@index([leaderId])
   @@index([eventId])
@@ -297,4 +298,30 @@ model Settlement {
   @@unique([capsuleId, teamId])
   @@index([teamId])
   @@map("settlements")
+}
+
+// ---------------------------------------------------------------------------
+// Judging table. Judges physically walk the floor during the demo session, so
+// results are recorded on phones; scoped per judge so a judge only edits their
+// own review and two judges can review the same team independently.
+// ---------------------------------------------------------------------------
+
+model JudgeEvaluation {
+  id                        String   @id @default(cuid())
+  teamId                    Int
+  judgeName                 String   @db.VarChar(80)
+  problemMarketScore        Int      @db.SmallInt
+  saasPotentialScore        Int      @db.SmallInt
+  productExecutionScore     Int      @db.SmallInt
+  innovationScore           Int      @db.SmallInt
+  resourceUtilizationScore  Int      @db.SmallInt
+  totalScore                Int      @db.SmallInt
+  createdAt                 DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt                 DateTime @updatedAt @db.Timestamptz(3)
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, judgeName])
+  @@index([teamId])
+  @@map("judge_evaluations")
 }
