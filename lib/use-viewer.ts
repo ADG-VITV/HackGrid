@@ -2,13 +2,25 @@
 
 import { useEffect } from "react";
 import { useAuth } from "@/context/AuthContext";
-import { readLocal, useLocalStorageValue, writeLocal } from "./use-local-storage";
+import {
+  readLocal,
+  useSessionStorageValue,
+  writeLocal,
+  writeSession,
+} from "./use-local-storage";
 
 const IS_DEV = process.env.NODE_ENV === "development";
 
-/** Where the app remembers the email it last identified the viewer by. */
+/**
+ * Production only: where the app remembers the email it last identified the
+ * viewer by (localStorage, shared by every tab). Development never writes it.
+ */
 const EMAIL_KEY = "hackgrid:gmail";
-/** Development only: the person the site is currently pretending signed in. */
+/**
+ * Development only: the person this tab is pretending signed in. Kept in
+ * sessionStorage so each tab can be someone else — a lead in one, a member in
+ * another — and a fresh tab starts as nobody.
+ */
 const ACT_AS_KEY = "hackgrid:actAs";
 
 export type ActAsUser = { email: string; name: string };
@@ -43,21 +55,18 @@ function parseActAs(raw: string | null): ActAsUser | null {
 }
 
 /**
- * Development only. From here on every page behaves as if `user` had signed
- * in with Google — the navbar, the teams page, the bidding page — until
- * `stopActingAs` (Logout in the navbar). Production ignores this entirely.
+ * Development only. From here on every page in this tab behaves as if `user`
+ * had signed in with Google — the navbar, the teams page, the bidding page —
+ * until `stopActingAs` (Logout in the navbar). Production ignores this.
  */
 export function startActingAs(user: ActAsUser) {
   if (!IS_DEV) return;
-  writeLocal(ACT_AS_KEY, JSON.stringify(user));
-  writeLocal(EMAIL_KEY, normalize(user.email) || null);
+  writeSession(ACT_AS_KEY, JSON.stringify(user));
 }
 
 /** Back to the real session, if there is one. */
 export function stopActingAs() {
-  writeLocal(ACT_AS_KEY, null);
-  // The session effect in useViewer re-persists a real sign-in straight away.
-  writeLocal(EMAIL_KEY, null);
+  writeSession(ACT_AS_KEY, null);
 }
 
 /**
@@ -69,17 +78,23 @@ export function stopActingAs() {
  */
 export function useViewer(): Viewer {
   const { user, loading, signOut } = useAuth();
-  const actAs = parseActAs(useLocalStorageValue(ACT_AS_KEY));
+  const actAs = parseActAs(useSessionStorageValue(ACT_AS_KEY));
   const sessionEmail = normalize(user?.email);
 
-  // Keep storage in step with the session so a tab that signs in and later
-  // out still reflects the last real identity. While acting as someone the
-  // key is theirs.
-  const actingAsEmail = actAs?.email ?? "";
+  // Production: keep localStorage in step with the session so a tab that
+  // signs in and later out still reflects the last real identity.
+  // Development: never write localStorage — the acted-as person lives in this
+  // tab's sessionStorage only. Any keys left behind by the earlier scheme,
+  // which did share them across tabs, are cleared so they cannot mislead.
   useEffect(() => {
-    if (actingAsEmail || !sessionEmail) return;
+    if (IS_DEV) {
+      if (readLocal(ACT_AS_KEY) !== null) writeLocal(ACT_AS_KEY, null);
+      if (readLocal(EMAIL_KEY) !== null) writeLocal(EMAIL_KEY, null);
+      return;
+    }
+    if (!sessionEmail) return;
     if (readLocal(EMAIL_KEY) !== sessionEmail) writeLocal(EMAIL_KEY, sessionEmail);
-  }, [actingAsEmail, sessionEmail]);
+  }, [sessionEmail]);
 
   if (actAs) {
     return {

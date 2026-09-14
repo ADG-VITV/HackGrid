@@ -76,8 +76,8 @@ export function ActAsCard() {
         I only come in development
       </h2>
       <p className="mt-2 max-w-xs text-sm leading-6 text-zinc-500">
-        Pick anyone on the roster and the site behaves as if they signed in. Logout in the navbar
-        ends it.
+        Pick anyone on the roster and this tab behaves as if they signed in — open another tab
+        to be someone else. Logout in the navbar ends it.
       </p>
 
       <div ref={pickerRef} className="relative mt-6 w-full max-w-xs text-left">
