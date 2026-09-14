@@ -7,8 +7,9 @@ import Footer from "@/components/footer1";
 
 export default function Home() {
   return (
-    <main className="relative bg-[#060c07] text-white min-h-screen">
-      {/* One viewport-fixed grid sits behind every transparent section,
+    <>
+      {/* ClientLayout already wraps the page in <main>, so no second one here.
+          One viewport-fixed grid sits behind every transparent section,
           including the footer, so its lines never restart at section bounds. */}
       <div className="fixed inset-0 z-0 h-screen w-screen bg-[#030704]">
         <BulgeGrid />
@@ -17,11 +18,11 @@ export default function Home() {
       <section className="relative h-screen w-full overflow-hidden bg-transparent cursor-none">
         <Hero />
       </section>
-      
+
       <HackDetails />
       <HackGridTimeline />
       <ADG_details />
       <Footer />
-    </main>
+    </>
   );
 }
