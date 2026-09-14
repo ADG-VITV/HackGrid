@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { CSSProperties } from "react";
 
-const COUNTDOWN_TARGET = new Date("2026-09-16T08:00:00");
+const COUNTDOWN_TARGET = new Date("2026-09-16T09:00:00");
 
 /* ========================================
    POSITION / SIZE CONTROLS
