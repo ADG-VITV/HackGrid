@@ -2,6 +2,7 @@
 
 import type { ConnectionState } from "./use-auction-socket";
 import type { TeamOption } from "./actions";
+import { Credits } from "./credits";
 
 const connectionCopy: Record<ConnectionState, { label: string; className: string }> = {
   idle: { label: "No room", className: "border-zinc-700 bg-zinc-900 text-zinc-500" },
@@ -75,9 +76,8 @@ export function ActAsBar({
       <span className="ml-auto text-sm text-zinc-400">
         Balance{" "}
         <span className="font-mono text-base font-semibold text-neon">
-          {balance === null ? "—" : balance.toLocaleString("en-US")}
-        </span>{" "}
-        credits
+          {balance === null ? "—" : <Credits value={balance} />}
+        </span>
       </span>
     </div>
   );

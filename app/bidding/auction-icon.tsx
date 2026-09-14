@@ -46,3 +46,16 @@ export function PlusIcon() {
     </svg>
   );
 }
+
+/** The HackGrid coin from /public/coin.svg, sized to the surrounding text. */
+export function CoinIcon({ className = "" }: { className?: string }) {
+  return (
+    <img
+      src="/coin.svg"
+      alt=""
+      aria-hidden
+      draggable={false}
+      className={`inline-block size-[1em] shrink-0 select-none align-[-0.14em] ${className}`}
+    />
+  );
+}

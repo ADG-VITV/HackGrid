@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { GeistPixelSquare } from "geist/font/pixel";
 import ClientLayout from "./ClientLayout";
+import StyledJsxRegistry from "./styled-jsx-registry";
 import { AuthProvider } from "@/context/AuthContext";
 import "./globals.css";
 
@@ -30,12 +32,18 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      className={`${geistSans.variable} ${geistMono.variable} ${GeistPixelSquare.variable} h-full antialiased`}
+      style={{
+        "--font-geist-pixel": "'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace",
+        "--font-geist-pixel-square": "'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace",
+      } as React.CSSProperties}
     >
       <body className="min-h-full flex flex-col bg-black text-white m-0 p-0 relative overscroll-none">
-        <AuthProvider>
-          <ClientLayout>{children}</ClientLayout>
-        </AuthProvider>
+        <StyledJsxRegistry>
+          <AuthProvider>
+            <ClientLayout>{children}</ClientLayout>
+          </AuthProvider>
+        </StyledJsxRegistry>
       </body>
     </html>
   );

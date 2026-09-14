@@ -81,10 +81,16 @@ export function BiddingClient() {
 
   // ---------------------------------------------------------------- identity
 
-  useEffect(() => {
+  // Pod seats change every round, so the dev roster is re-read whenever pods
+  // are (re)drawn, not just on first load.
+  const refreshTeams = useCallback(() => {
     if (!IS_DEV) return;
     listTeamsAction().then(setTeams).catch(() => undefined);
   }, []);
+
+  useEffect(() => {
+    refreshTeams();
+  }, [refreshTeams]);
 
   useEffect(() => {
     let cancelled = false;
@@ -128,7 +134,9 @@ export function BiddingClient() {
   // ------------------------------------------------------------------ socket
 
   // Exactly one capsule runs at a time, so there is exactly one room to be in.
-  const liveCapsule = context.capsules.find((capsule) => capsule.status === "LIVE") ?? null;
+  // The server keeps exactly one capsule live; if it ever reports more, the
+  // one furthest along the running order is the current round.
+  const liveCapsule = context.capsules.findLast((capsule) => capsule.status === "LIVE") ?? null;
   const activePodId = liveCapsule?.podId ?? null;
 
   const { connection, state: room, entries, feedback, clockSkew, placeBid, clearEntries, lastEvent } =
@@ -144,8 +152,9 @@ export function BiddingClient() {
       lastEvent.type === "EVENT_COMPLETE"
     ) {
       refreshContext(teamId);
+      refreshTeams();
     }
-  }, [lastEvent, teamId, refreshContext]);
+  }, [lastEvent, teamId, refreshContext, refreshTeams]);
 
   // Settlements land in the Resource Manager, so refresh it when a lot closes.
   useEffect(() => {
@@ -173,6 +182,7 @@ export function BiddingClient() {
       const report = await fn();
       pushLocal(report.status === "error" ? "error" : "success", `${label}: ${report.message}`);
       refreshContext(teamId);
+      refreshTeams();
     });
   }
 
@@ -191,7 +201,7 @@ export function BiddingClient() {
       return eventComplete
         ? "Every round is finished. Your final product spec is in the Resource Manager."
         : IS_DEV
-          ? "No round is live. Hit Start event to draw pods for the Track Auction; each later round opens itself when the one before it finishes."
+          ? "No round is live. Hit Start event to prepare every round's pods, then open one from /admin or with Force here. Nothing opens on its own."
           : "The auction has not started yet. This page will come alive when the first round opens.";
     }
     if (!liveCapsule.podId) {
@@ -236,7 +246,7 @@ export function BiddingClient() {
               Reset event
             </button>
             <span className="text-[0.62rem] text-zinc-600">
-              One press runs all five rounds in order; each opens the next when it settles.
+              Start event prepares all {auctionTiles.length} rounds and locks in their pods; it opens nothing. Force opens a round out of order, closing whichever was live.
             </span>
           </div>
         ) : null}
@@ -247,7 +257,9 @@ export function BiddingClient() {
               {context.capsules.map((capsule) => {
                 const isLive = capsule.status === "LIVE";
                 const isClosed = capsule.status === "CLOSED";
-                const isOpen = isLive && expanded;
+                // The pod room belongs to the current round only, never to a
+                // tile that merely shares its status.
+                const isOpen = capsule.key === liveCapsule?.key && expanded;
                 const tile = auctionTiles.find((t) => t.id === capsule.key);
                 const biddable =
                   tile?.items.filter((item) => item.minIncrement !== null).length ?? 0;
@@ -401,7 +413,7 @@ export function BiddingClient() {
         </section>
 
         <p className="pb-2 text-center text-[0.62rem] text-zinc-700">
-          Rounds run one at a time in order · pods are drawn when a round opens · all bids validated
+          Rounds run one at a time in order · pods are prepared at event start · all bids validated
           and recorded server-side
         </p>
       </div>
