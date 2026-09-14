@@ -4,15 +4,14 @@ import type { JudgeTeamView, JudgeEvaluationView } from "./actions";
 
 function statusLabel(evaluation: JudgeEvaluationView | null) {
   if (!evaluation) return null;
-  return "Saved";
+  return evaluation.status === "SUBMITTED" ? "Submitted" : "Draft";
 }
 
 function timeAgo(iso: string) {
   const diff = Date.now() - new Date(iso).getTime();
   if (diff < 60_000) return "just now";
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)} min ago`;
-  if (diff < 86_400_000)
-    return `${Math.floor(diff / 3_600_000)}h ago`;
+  if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return new Date(iso).toLocaleDateString("en-US", {
     month: "short",
     day: "numeric",
@@ -22,9 +21,11 @@ function timeAgo(iso: string) {
 export function TeamOverview({
   team,
   evaluation,
+  maxTotal,
 }: {
   team: JudgeTeamView | null;
   evaluation: JudgeEvaluationView | null;
+  maxTotal: number;
 }) {
   if (!team) {
     return (
@@ -61,7 +62,9 @@ export function TeamOverview({
 
       {evaluation ? (
         <p className="mt-2 font-mono text-[0.6rem] text-zinc-600">
-          {evaluation.totalScore}/100 &middot; updated {timeAgo(evaluation.updatedAt)}
+          {evaluation.total}/{maxTotal} &middot; updated{" "}
+          {timeAgo(evaluation.updatedAt)}
+          {evaluation.review ? " \u00B7 notes included" : ""}
         </p>
       ) : null}
 

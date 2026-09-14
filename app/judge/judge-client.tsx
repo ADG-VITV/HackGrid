@@ -1,93 +1,43 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { useAuth } from "@/context/AuthContext";
+import { auth } from "@/lib/firebase";
 import {
+  getJudgeSessionAction,
+  redeemJudgeInvitationAction,
   searchJudgeTeamsAction,
   getJudgeReviewAction,
-  verifyJudgeAccessAction,
   submitJudgeEvaluationAction,
+  type JudgeSessionResult,
+  type JudgeSessionView,
   type JudgeSearchResult,
   type JudgeReviewContext,
   type JudgeEvaluationView,
   type JudgeSubmitReport,
+  type JudgeEntranceReport,
 } from "./actions";
-import { JudgeAccess } from "./judge-access";
+import { JudgeEntrance, type EntranceView } from "./judge-entrance";
 import { TeamSearch } from "./team-search";
 import { TeamOverview } from "./team-overview";
 import { AuctionResources } from "./auction-resources";
 import { EvaluationForm } from "./evaluation-form";
 import { SubmitBar } from "./submit-bar";
 
-// ---------------------------------------------------------------------------
-// Judge identity store (persisted to localStorage via useSyncExternalStore)
-// ---------------------------------------------------------------------------
-
-const JUDGE_NAME_KEY = "hackgrid:judgeName";
-const JUDGE_PASSCODE_KEY = "hackgrid:judgePasscode";
-const JUDGE_AUTH_KEY = "hackgrid:judgePasscodeVerified";
-
-type JudgeIdentity = {
-  name: string;
-  passcode: string;
-  verified: boolean;
-};
-
-const EMPTY_IDENTITY: JudgeIdentity = { name: "", passcode: "", verified: false };
-
-let identityCache: JudgeIdentity = EMPTY_IDENTITY;
-const identityListeners = new Set<() => void>();
-
-function subscribeIdentity(listener: () => void) {
-  identityListeners.add(listener);
-  return () => {
-    identityListeners.delete(listener);
-  };
-}
-
-function readIdentity() {
-  if (typeof window === "undefined") return EMPTY_IDENTITY;
-  const name = window.localStorage.getItem(JUDGE_NAME_KEY) ?? "";
-  const passcode = window.localStorage.getItem(JUDGE_PASSCODE_KEY) ?? "";
-  const verified = window.localStorage.getItem(JUDGE_AUTH_KEY) === "true";
-  if (
-    identityCache.name !== name ||
-    identityCache.passcode !== passcode ||
-    identityCache.verified !== verified
-  ) {
-    identityCache = { name, passcode, verified };
-  }
-  return identityCache;
-}
-
-function writeIdentity(name: string, passcode: string, verified: boolean) {
-  if (typeof window !== "undefined") {
-    window.localStorage.setItem(JUDGE_NAME_KEY, name);
-    window.localStorage.setItem(JUDGE_PASSCODE_KEY, passcode);
-    window.localStorage.setItem(JUDGE_AUTH_KEY, verified ? "true" : "false");
-  }
-  identityCache = { name, passcode, verified };
-  identityListeners.forEach((listener) => listener());
-}
-
-const SCORE_KEYS = [
-  "problemMarketScore",
-  "saasPotentialScore",
-  "productExecutionScore",
-  "innovationScore",
-  "resourceUtilizationScore",
-] as const;
+type EntranceStage = "bootstrapping" | "entrance" | "active";
 
 export function JudgeClient() {
-  const [mode, setMode] = useState<"search" | "review">("search");
-  const identity = useSyncExternalStore(
-    subscribeIdentity,
-    readIdentity,
-    () => EMPTY_IDENTITY,
-  );
+  const { user, loading: authLoading, signOut } = useAuth();
 
-  // access
-  const [accessPending, startAccess] = useTransition();
-  const [accessMessage, setAccessMessage] = useState<string | null>(null);
+  const [session, setSession] = useState<
+    { result: JudgeSessionResult; firebaseUid: string | null } | null
+  >(null);
+
+  // invitation
+  const [code, setCode] = useState("");
+  const [redeemPending, startRedeem] = useTransition();
+  const [redeemMessage, setRedeemMessage] = useState<string | null>(null);
 
   // search
   const [query, setQuery] = useState("");
@@ -97,18 +47,17 @@ export function JudgeClient() {
     teams: [],
   });
   const [searchPending, startSearch] = useTransition();
-  const searchMounted = useRef(false);
 
   // review
+  const [mode, setMode] = useState<"search" | "review">("search");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [context, setContext] = useState<JudgeReviewContext | null>(null);
   const [reviewPending, startReview] = useTransition();
   const [reviewError, setReviewError] = useState<string | null>(null);
 
-  // scores
-  const [scores, setScores] = useState<
-    Record<string, number | undefined> | null
-  >(null);
+  // scoring
+  const [scores, setScores] = useState<Record<string, number> | null>(null);
+  const [review, setReview] = useState("");
   const [savedEvaluation, setSavedEvaluation] =
     useState<JudgeEvaluationView | null>(null);
 
@@ -116,69 +65,165 @@ export function JudgeClient() {
   const [submitPending, startSubmit] = useTransition();
   const [feedback, setFeedback] = useState<JudgeSubmitReport | null>(null);
 
-  const passcodeForQuery = identity.verified ? identity.name : null;
+  // ------------------------------------------------------------------ session
 
-  // Debounced team search
+  const resolving =
+    authLoading || Boolean(user && (session === null || session.firebaseUid !== user.uid));
+
   useEffect(() => {
-    if (!searchMounted.current) {
-      searchMounted.current = true;
-    }
+    if (authLoading) return;
+    const currentUid = user?.uid ?? null;
+    if (!currentUid) return;
+    getJudgeSessionAction(currentUid)
+      .then((result) => setSession({ result, firebaseUid: currentUid }))
+      .catch(() =>
+        setSession({
+          result: {
+            status: "denied",
+            message: "Could not check your judging access. Try again.",
+          },
+          firebaseUid: currentUid,
+        }),
+      );
+  }, [authLoading, user?.uid]);
+
+  const activeSession: JudgeSessionView | null =
+    session?.result.status === "active" && session.firebaseUid === user?.uid
+      ? session.result.session
+      : null;
+
+  const stage: EntranceStage = !user
+    ? "entrance"
+    : resolving
+      ? "bootstrapping"
+      : activeSession
+        ? "active"
+        : "entrance";
+
+  let entranceView: EntranceView;
+  if (!user) {
+    entranceView = { view: "signed_out" };
+  } else if (session?.result.status === "denied" && session.firebaseUid === user.uid) {
+    entranceView = { view: "denied", message: session.result.message };
+  } else {
+    entranceView = { view: "redeem" };
+  }
+
+  function resetForSearch() {
+    setMode("search");
+    setSelectedId(null);
+    setContext(null);
+    setScores(null);
+    setReview("");
+    setSavedEvaluation(null);
+    setFeedback(null);
+    setReviewError(null);
+  }
+
+  function handleSignIn() {
+    startRedeem(async () => {
+      setRedeemMessage(null);
+      try {
+        await signInWithPopup(auth, new GoogleAuthProvider());
+      } catch {
+        setRedeemMessage("Sign-in was cancelled or failed. Try again.");
+      }
+    });
+  }
+
+  function handleSignOut() {
+    resetForSearch();
+    setCode("");
+    setRedeemMessage(null);
+    signOut().catch(() => undefined);
+  }
+
+  function handleRedeem() {
+    if (!user || !code.trim()) return;
+    startRedeem(async () => {
+      setRedeemMessage(null);
+      const fd = new FormData();
+      fd.set("firebaseUid", user.uid);
+      fd.set("name", user.displayName ?? "");
+      fd.set("email", user.email ?? "");
+      fd.set("code", code.trim().toUpperCase());
+      const report: JudgeEntranceReport = await redeemJudgeInvitationAction(
+        { status: "error", message: "" },
+        fd,
+      ).catch(() => ({
+        status: "error" as const,
+        message: "Could not redeem the code. Try again.",
+      }));
+      setRedeemMessage(report.message);
+      if (report.status === "success") {
+        getJudgeSessionAction(user.uid)
+          .then((result) => setSession({ result, firebaseUid: user.uid }))
+          .catch(() => undefined);
+      }
+    });
+  }
+
+  // ------------------------------------------------------------ team search
+
+  useEffect(() => {
+    if (stage !== "active") return;
+    const currentUid = user?.uid ?? null;
     const timer = setTimeout(() => {
       startSearch(async () => {
-        const result = await searchJudgeTeamsAction(
-          query,
-          passcodeForQuery,
-        ).catch(() => ({
-          status: "error" as const,
-          message: "Could not load teams.",
-          teams: [],
-        }));
+        const result = await searchJudgeTeamsAction(currentUid, query).catch(
+          () => ({
+            status: "error" as const,
+            message: "Could not load teams.",
+            teams: [],
+          }),
+        );
         setSearchResult(result);
       });
     }, 220);
     return () => clearTimeout(timer);
-  }, [query, passcodeForQuery]);
+  }, [query, stage, user?.uid]);
 
-  // Load review context
+  // ------------------------------------------------------------------ review
+
   const loadReview = useCallback(
     (teamId: number) => {
+      const currentUid = user?.uid ?? null;
       startReview(async () => {
         setReviewError(null);
-        const result = await getJudgeReviewAction(
-          teamId,
-          passcodeForQuery,
-        ).catch(() => ({
-          status: "error" as const,
-          message: "Could not load team data.",
-          context: null,
-        }));
+        const result = await getJudgeReviewAction(currentUid, teamId).catch(
+          () => ({
+            status: "error" as const,
+            message: "Could not load team data.",
+            context: null,
+          }),
+        );
         if (result.status === "error") {
           setReviewError(result.message);
           setContext(null);
           setScores(null);
+          setReview("");
           setSavedEvaluation(null);
         } else {
           setContext(result.context);
-          setSavedEvaluation(result.context?.evaluation ?? null);
-          if (result.context?.evaluation) {
-            const e = result.context.evaluation;
-            setScores({
-              problemMarketScore: e.problemMarketScore,
-              saasPotentialScore: e.saasPotentialScore,
-              productExecutionScore: e.productExecutionScore,
-              innovationScore: e.innovationScore,
-              resourceUtilizationScore: e.resourceUtilizationScore,
-            });
+          const evaluation = result.context?.evaluation ?? null;
+          setSavedEvaluation(evaluation);
+          if (evaluation) {
+            const map: Record<string, number> = {};
+            for (const score of evaluation.scores) {
+              map[score.criterionId] = score.score;
+            }
+            setScores(map);
+            setReview(evaluation.review ?? "");
           } else {
-            setScores(null);
+            setScores({});
+            setReview("");
           }
         }
       });
     },
-    [passcodeForQuery],
+    [user?.uid],
   );
 
-  // When selectedId changes, load review
   useEffect(() => {
     if (selectedId) loadReview(selectedId);
   }, [selectedId, loadReview]);
@@ -189,49 +234,24 @@ export function JudgeClient() {
     setFeedback(null);
     setContext(null);
     setScores(null);
+    setReview("");
     setSavedEvaluation(null);
     setReviewError(null);
   }
 
-  function handleFindAnotherTeam() {
-    setMode("search");
-    setSelectedId(null);
-    setContext(null);
-    setScores(null);
-    setSavedEvaluation(null);
-    setFeedback(null);
-    setReviewError(null);
-  }
-
-  function handleScoreChange(field: string, value: number) {
-    setScores((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
+  function handleScoreChange(criterionId: string, value: number) {
+    setScores((prev) => ({ ...(prev ?? {}), [criterionId]: value }));
     setFeedback(null);
   }
 
   function handleSubmit() {
-    if (!context || !scores) return;
-
-    if (!identity.verified) {
-      setFeedback({
-        status: "error",
-        message: "Enter your judge name and passcode to submit.",
-        evaluation: null,
-      });
-      return;
-    }
+    if (!context || !activeSession || !user) return;
 
     const fd = new FormData();
+    fd.set("firebaseUid", user.uid);
     fd.set("teamId", String(context.team.id));
-    fd.set("judgeName", identity.name);
-    fd.set("passcode", identity.passcode);
-
-    for (const key of SCORE_KEYS) {
-      const value = scores[key];
-      fd.set(key, value !== undefined ? String(value) : "0");
-    }
+    fd.set("review", review);
+    fd.set("scores", JSON.stringify(scores ?? {}));
 
     startSubmit(async () => {
       const result = await submitJudgeEvaluationAction(fd).catch(
@@ -248,41 +268,23 @@ export function JudgeClient() {
       if (result.status === "success") {
         setSavedEvaluation(result.evaluation);
         loadReview(context.team.id);
+        startSearch(async () => {
+          const search = await searchJudgeTeamsAction(user.uid, query).catch(
+            () => searchResult,
+          );
+          setSearchResult(search);
+        });
       }
     });
   }
 
-  // Re-evaluate total from scores
-  const total = scores
-    ? Math.min(
-        100,
-        SCORE_KEYS.reduce((sum, key) => sum + (scores[key] ?? 0), 0),
-      )
-    : 0;
+  const criteria = activeSession?.criteria ?? [];
+  const maxTotal = activeSession?.maxTotal ?? 0;
+  const total = criteria.reduce((sum, c) => sum + (scores?.[c.id] ?? 0), 0);
+  const isComplete =
+    scores !== null && criteria.every((c) => scores[c.id] !== undefined);
 
-  const isComplete = scores !== null && SCORE_KEYS.every(
-    (key) => scores[key] !== undefined,
-  );
-
-  function handleActivate() {
-    setAccessMessage(null);
-    startAccess(async () => {
-      const result = await verifyJudgeAccessAction(
-        identity.name.trim(),
-        identity.passcode.trim(),
-      ).catch(() => ({
-        ok: false,
-        message: "Could not verify. Try again.",
-      }));
-      if (result.ok) {
-        writeIdentity(identity.name.trim(), identity.passcode.trim(), true);
-        setAccessMessage(result.message);
-      } else {
-        writeIdentity(identity.name, identity.passcode, false);
-        setAccessMessage(result.message);
-      }
-    });
-  }
+  // ---------------------------------------------------------------- render
 
   return (
     <main className="min-h-dvh bg-black">
@@ -302,97 +304,104 @@ export function JudgeClient() {
           </h1>
           <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
             Search for a team, review what they acquired in the auction, score
-            them against the official criteria, and submit.
+            them against the event rubric, and submit.
           </p>
         </header>
 
-        {/* Judge identity bar */}
-        <JudgeAccess
-          judgeName={identity.name}
-          passcode={identity.passcode}
-          granted={identity.verified}
-          pending={accessPending}
-          message={accessMessage}
-          onJudgeNameChange={(name) => {
-            writeIdentity(name, identity.passcode, false);
-            setAccessMessage(null);
-          }}
-          onPasscodeChange={(pc) => {
-            writeIdentity(identity.name, pc, false);
-            setAccessMessage(null);
-          }}
-          onActivate={handleActivate}
-          onReset={() => {
-            writeIdentity("", "", false);
-            setAccessMessage(null);
-          }}
-        />
-
-        {mode === "search" ? (
-          <TeamSearch
-            query={query}
-            onQueryChange={setQuery}
-            result={searchResult}
-            pending={searchPending}
-            onSelect={handleSelectTeam}
-          />
+        {stage === "bootstrapping" ? (
+          <div className="h-24 animate-pulse rounded-2xl border border-white/10 bg-zinc-950" />
         ) : (
           <>
-            <button
-              type="button"
-              onClick={handleFindAnotherTeam}
-              className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-400 transition hover:border-[#42ff5a]/40 hover:text-[#42ff5a]"
-            >
-              <span aria-hidden="true">&#8592;</span>
-              Find another team
-            </button>
+            <JudgeEntrance
+              view={entranceView}
+              firebaseName={user?.displayName ?? null}
+              firebaseEmail={user?.email ?? null}
+              code={code}
+              pending={redeemPending}
+              message={redeemMessage}
+              onCodeChange={setCode}
+              onRedeem={handleRedeem}
+              onSignIn={handleSignIn}
+              onSignOut={handleSignOut}
+            />
 
-            {reviewPending && !context ? (
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="space-y-4">
-                  <div className="h-44 animate-pulse rounded-2xl border border-white/10 bg-zinc-950" />
-                  <div className="h-64 animate-pulse rounded-2xl border border-white/10 bg-zinc-950" />
-                </div>
-                <div className="h-[600px] animate-pulse rounded-2xl border border-white/10 bg-zinc-950" />
-              </div>
-            ) : reviewError ? (
-              <div className="rounded-2xl border border-red-500/30 bg-red-500/[0.06] p-5">
-                <p className="text-sm text-red-200">{reviewError}</p>
-                <button
-                  type="button"
-                  onClick={() => selectedId && loadReview(selectedId)}
-                  className="mt-3 rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-red-300 hover:bg-red-500/10"
-                >
-                  Retry
-                </button>
-              </div>
-            ) : context ? (
-              <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
-                <div className="space-y-4">
-                  <TeamOverview team={context.team} evaluation={savedEvaluation} />
-                  <AuctionResources resources={context.resources} />
-                </div>
-                <EvaluationForm
-                  scores={scores}
-                  evaluation={savedEvaluation}
-                  onChange={handleScoreChange}
+            {stage === "active" &&
+              (mode === "search" ? (
+                <TeamSearch
+                  query={query}
+                  onQueryChange={setQuery}
+                  result={searchResult}
+                  pending={searchPending}
+                  maxTotal={maxTotal}
+                  onSelect={handleSelectTeam}
                 />
-              </div>
-            ) : null}
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    onClick={resetForSearch}
+                    className="mb-4 flex items-center gap-2 rounded-lg border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-zinc-400 transition hover:border-[#42ff5a]/40 hover:text-[#42ff5a]"
+                  >
+                    <span aria-hidden="true">&#8592;</span>
+                    Find another team
+                  </button>
+
+                  {reviewPending && !context ? (
+                    <div className="grid gap-4 lg:grid-cols-2">
+                      <div className="space-y-4">
+                        <div className="h-44 animate-pulse rounded-2xl border border-white/10 bg-zinc-950" />
+                        <div className="h-64 animate-pulse rounded-2xl border border-white/10 bg-zinc-950" />
+                      </div>
+                      <div className="h-[600px] animate-pulse rounded-2xl border border-white/10 bg-zinc-950" />
+                    </div>
+                  ) : reviewError ? (
+                    <div className="rounded-2xl border border-red-500/30 bg-red-500/[0.06] p-5">
+                      <p className="text-sm text-red-200">{reviewError}</p>
+                      <button
+                        type="button"
+                        onClick={() => selectedId && loadReview(selectedId)}
+                        className="mt-3 rounded-lg border border-red-500/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-red-300 hover:bg-red-500/10"
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  ) : context ? (
+                    <div className="grid gap-4 lg:grid-cols-[minmax(0,5fr)_minmax(0,6fr)]">
+                      <div className="space-y-4">
+                        <TeamOverview
+                          team={context.team}
+                          evaluation={savedEvaluation}
+                          maxTotal={maxTotal}
+                        />
+                        <AuctionResources resources={context.resources} />
+                      </div>
+                      <EvaluationForm
+                        criteria={criteria}
+                        scores={scores}
+                        review={review}
+                        evaluation={savedEvaluation}
+                        maxTotal={maxTotal}
+                        onChange={handleScoreChange}
+                        onReviewChange={setReview}
+                      />
+                    </div>
+                  ) : null}
+                </>
+              ))}
           </>
         )}
       </div>
 
       {/* Sticky submit bar — review mode only */}
-      {mode === "review" && context ? (
+      {mode === "review" && context && stage === "active" ? (
         <SubmitBar
           total={total}
+          maxTotal={maxTotal}
           complete={isComplete}
           isUpdate={Boolean(savedEvaluation)}
           pending={submitPending}
-          granted={identity.verified}
           feedback={feedback}
-          onFindTeam={handleFindAnotherTeam}
+          onFindTeam={resetForSearch}
           onSubmit={handleSubmit}
         />
       ) : null}

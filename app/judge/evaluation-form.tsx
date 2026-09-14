@@ -1,36 +1,33 @@
 "use client";
 
-import { CRITERIA, TOTAL_MAX } from "./criteria";
-import type { JudgeEvaluationView } from "./actions";
+import type { JudgeCriterionView, JudgeEvaluationView } from "./actions";
 
 function ScoreInput({
-  criterionKey,
-  criterionName,
-  max,
-  description,
+  criterion,
   value,
   onChange,
 }: {
-  criterionKey: string;
-  criterionName: string;
-  max: number;
-  description: string;
+  criterion: JudgeCriterionView;
   value: number | undefined;
-  onChange: (field: string, value: number) => void;
+  onChange: (criterionId: string, value: number) => void;
 }) {
-  const currentValue = value ?? 0;
+  const min = criterion.minScore;
+  const max = criterion.maxScore;
+  const currentValue = value ?? min;
   const isTouched = value !== undefined;
-  const fillPercent = isTouched ? (currentValue / max) * 100 : 0;
+  const fillPercent = isTouched
+    ? ((currentValue - min) / Math.max(1, max - min)) * 100
+    : 0;
 
   return (
     <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h4 className="text-sm font-semibold text-zinc-100">
-            {criterionName}
+            {criterion.name}
           </h4>
           <p className="mt-0.5 text-[0.68rem] leading-5 text-zinc-500">
-            {description}
+            {criterion.description}
           </p>
         </div>
         <span className="shrink-0 rounded-full bg-white/[0.06] px-2.5 py-0.5 font-mono text-[0.6rem] font-semibold text-zinc-400">
@@ -41,9 +38,9 @@ function ScoreInput({
       <div className="mt-3 flex items-center gap-3">
         <button
           type="button"
-          aria-label={`Decrease ${criterionName}`}
-          disabled={currentValue <= 0}
-          onClick={() => onChange(criterionKey, Math.max(0, currentValue - 1))}
+          aria-label={`Decrease ${criterion.name}`}
+          disabled={currentValue <= min}
+          onClick={() => onChange(criterion.id, Math.max(min, currentValue - 1))}
           className="grid size-12 shrink-0 place-items-center rounded-full border border-white/15 bg-white/[0.04] text-xl font-light text-zinc-300 transition active:scale-95 hover:border-[#42ff5a]/50 hover:text-[#42ff5a] disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <span aria-hidden="true">&#8722;</span>
@@ -51,13 +48,13 @@ function ScoreInput({
 
         <input
           type="range"
-          min={0}
+          min={min}
           max={max}
           step={1}
           value={currentValue}
           onChange={(e) => {
             const v = Number.parseInt(e.target.value, 10);
-            if (Number.isFinite(v)) onChange(criterionKey, v);
+            if (Number.isFinite(v)) onChange(criterion.id, v);
           }}
           className="hg-range h-8 w-full cursor-pointer"
           style={
@@ -65,14 +62,14 @@ function ScoreInput({
               "--fill": `${fillPercent}%`,
             } as React.CSSProperties
           }
-          aria-label={criterionName}
+          aria-label={criterion.name}
         />
 
         <button
           type="button"
-          aria-label={`Increase ${criterionName}`}
+          aria-label={`Increase ${criterion.name}`}
           disabled={currentValue >= max}
-          onClick={() => onChange(criterionKey, Math.min(max, currentValue + 1))}
+          onClick={() => onChange(criterion.id, Math.min(max, currentValue + 1))}
           className="grid size-12 shrink-0 place-items-center rounded-full border border-white/15 bg-white/[0.04] text-xl font-light text-zinc-300 transition active:scale-95 hover:border-[#42ff5a]/50 hover:text-[#42ff5a] disabled:opacity-30 disabled:cursor-not-allowed"
         >
           <span aria-hidden="true">+</span>
@@ -95,13 +92,21 @@ function ScoreInput({
 }
 
 export function EvaluationForm({
+  criteria,
   scores,
+  review,
   evaluation,
+  maxTotal,
   onChange,
+  onReviewChange,
 }: {
-  scores: Record<string, number | undefined> | null;
+  criteria: JudgeCriterionView[];
+  scores: Record<string, number> | null;
+  review: string;
   evaluation: JudgeEvaluationView | null;
-  onChange: (field: string, value: number) => void;
+  maxTotal: number;
+  onChange: (criterionId: string, value: number) => void;
+  onReviewChange: (review: string) => void;
 }) {
   return (
     <section className="space-y-4">
@@ -139,7 +144,7 @@ export function EvaluationForm({
           Evaluation Criteria
         </h3>
         <span className="font-mono text-[0.6rem] font-semibold text-zinc-500">
-          {TOTAL_MAX} pts total
+          {maxTotal} pts total
         </span>
       </div>
 
@@ -148,25 +153,41 @@ export function EvaluationForm({
           <p className="text-[0.6rem] text-zinc-400">
             You previously scored this team{" "}
             <span className="font-mono font-semibold text-[#42ff5a]">
-              {evaluation.totalScore}/{TOTAL_MAX}
-            </span>{" "}
+              {evaluation.total}/{maxTotal}
+            </span>
+            {evaluation.status === "SUBMITTED"
+              ? " and submitted it"
+              : " (draft)"}
+            {" "}
             &mdash; modify the scores below and resubmit to update.
           </p>
         </div>
       ) : null}
 
       {/* Score inputs */}
-      {CRITERIA.map((c) => (
+      {criteria.map((c) => (
         <ScoreInput
-          key={c.key}
-          criterionKey={c.key}
-          criterionName={c.name}
-          max={c.max}
-          description={c.description}
-          value={scores?.[c.key]}
+          key={c.id}
+          criterion={c}
+          value={scores?.[c.id]}
           onChange={onChange}
         />
       ))}
+
+      {/* Review notes */}
+      <div className="rounded-2xl border border-white/10 bg-zinc-950 p-4">
+        <h4 className="text-sm font-semibold text-zinc-100">Review notes</h4>
+        <p className="mt-0.5 text-[0.68rem] leading-5 text-zinc-500">
+          Optional. A short justification shared with the results desk.
+        </p>
+        <textarea
+          value={review}
+          onChange={(e) => onReviewChange(e.target.value)}
+          rows={4}
+          placeholder="What stood out about this team's build and resource usage?"
+          className="mt-3 h-auto w-full resize-none rounded-xl border border-white/10 bg-black px-3 py-2.5 text-sm text-white outline-none placeholder:text-zinc-700 focus:border-[#42ff5a]/60"
+        />
+      </div>
     </section>
   );
 }

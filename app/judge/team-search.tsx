@@ -8,12 +8,14 @@ export function TeamSearch({
   onQueryChange,
   result,
   pending,
+  maxTotal,
   onSelect,
 }: {
   query: string;
   onQueryChange: (q: string) => void;
   result: JudgeSearchResult;
   pending: boolean;
+  maxTotal: number;
   onSelect: (teamId: number) => void;
 }) {
   return (
@@ -76,7 +78,7 @@ export function TeamSearch({
                   </div>
                   {team.reviewedScore !== null ? (
                     <span className="shrink-0 rounded-full border border-[#42ff5a]/40 bg-[#42ff5a]/[0.08] px-2.5 py-0.5 font-mono text-[0.6rem] font-semibold text-[#42ff5a]">
-                      Scored {team.reviewedScore}/100
+                      {team.reviewedScore}/{maxTotal}
                     </span>
                   ) : null}
                 </div>

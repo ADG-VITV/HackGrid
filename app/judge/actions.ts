@@ -1,13 +1,56 @@
 "use server";
 
+import { createHash } from "node:crypto";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { STARTING_BALANCE } from "@/lib/auction-rules.mjs";
-import { revalidatePath } from "next/cache";
-import { CRITERIA, type CriterionKey } from "./criteria";
+import { EVENT_KEY } from "@/lib/auction-engine.mjs";
 
 // ---------------------------------------------------------------------------
-// Shared types
+// Judge portal server actions.
+//
+// Identity model: a judge signs in with Firebase. The client sends the
+// Firebase uid; the server resolves it to a JudgeProfile, then to the ACTIVE
+// JudgeEventAssignment for the current event. The judge's action is derived
+// and validated server-side — the client never sends an arbitrary assignment
+// or judge id it expects to be trusted.
+//
+// The rubric is event data: active JudgingCriterion rows ordered by
+// displayOrder, with minScore/maxScore as the only authoritative boundaries.
+// Nothing here hard-codes a 20/20/20/15/25 split.
 // ---------------------------------------------------------------------------
+
+export type JudgeCriterionView = {
+  id: string;
+  key: string;
+  name: string;
+  description: string | null;
+  minScore: number;
+  maxScore: number;
+  displayOrder: number;
+};
+
+export type JudgeSessionView = {
+  judgeId: string;
+  judgeName: string;
+  judgeEmail: string;
+  assignmentId: string;
+  eventId: string;
+  eventName: string;
+  startingBudget: number;
+  criteria: JudgeCriterionView[];
+  maxTotal: number;
+};
+
+export type JudgeSessionResult =
+  | { status: "signed_out" }
+  | { status: "no_profile" }
+  | { status: "denied"; message: string }
+  | { status: "active"; message: string; session: JudgeSessionView };
+
+export type JudgeEntranceReport = {
+  status: "success" | "invalid" | "error";
+  message: string;
+};
 
 export type JudgeTeamOption = {
   id: number;
@@ -16,6 +59,12 @@ export type JudgeTeamOption = {
   leaderName: string;
   memberNames: string[];
   reviewedScore: number | null;
+};
+
+export type JudgeSearchResult = {
+  status: "success" | "error";
+  message: string;
+  teams: JudgeTeamOption[];
 };
 
 export type JudgeMemberView = {
@@ -28,8 +77,6 @@ export type JudgeTeamView = {
   id: number;
   name: string;
   code: string;
-  leadName: string;
-  leadEmail: string;
   members: JudgeMemberView[];
 };
 
@@ -39,7 +86,6 @@ export type JudgeResourceItem = {
   tierName: string;
   pricePaid: number;
   priceSource: string;
-  settledAt: string;
 };
 
 export type JudgeResources = {
@@ -51,13 +97,11 @@ export type JudgeResources = {
 
 export type JudgeEvaluationView = {
   id: string;
-  judgeName: string;
-  problemMarketScore: number;
-  saasPotentialScore: number;
-  productExecutionScore: number;
-  innovationScore: number;
-  resourceUtilizationScore: number;
-  totalScore: number;
+  status: "DRAFT" | "SUBMITTED";
+  review: string | null;
+  scores: Array<{ criterionId: string; key: string; score: number }>;
+  total: number;
+  submittedAt: string | null;
   updatedAt: string;
 };
 
@@ -67,400 +111,631 @@ export type JudgeReviewContext = {
   evaluation: JudgeEvaluationView | null;
 };
 
-export type JudgeSearchResult = {
-  status: "success" | "error";
-  message: string;
-  teams: JudgeTeamOption[];
-};
-
-export type JudgeReviewResult = {
-  status: "success" | "error";
-  message: string;
-  context: JudgeReviewContext | null;
-};
-
-export type JudgeAccessReport = {
-  ok: boolean;
-  message: string;
-};
-
 export type JudgeSubmitReport = {
-  status: "success" | "error" | "invalid";
+  status: "success" | "invalid" | "error";
   message: string;
   evaluation: JudgeEvaluationView | null;
 };
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-const DB_MISSING =
-  "Add DATABASE_URL for your Neon Postgres database, then run Prisma generate and db push.";
-
-function invalid(message: string): JudgeSubmitReport {
-  return { status: "invalid", message, evaluation: null };
-}
-
-function toEvaluationView(e: {
-  id: string;
-  judgeName: string;
-  problemMarketScore: number;
-  saasPotentialScore: number;
-  productExecutionScore: number;
-  innovationScore: number;
-  resourceUtilizationScore: number;
-  totalScore: number;
-  updatedAt: Date;
-}): JudgeEvaluationView {
-  return {
-    id: e.id,
-    judgeName: e.judgeName,
-    problemMarketScore: e.problemMarketScore,
-    saasPotentialScore: e.saasPotentialScore,
-    productExecutionScore: e.productExecutionScore,
-    innovationScore: e.innovationScore,
-    resourceUtilizationScore: e.resourceUtilizationScore,
-    totalScore: e.totalScore,
-    updatedAt: e.updatedAt.toISOString(),
-  };
-}
 
 function field(formData: FormData, key: string) {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
 }
 
-function judgePasscodeConfigured() {
-  const code = process.env.JUDGE_PASSCODE;
-  return typeof code === "string" && code.length >= 4;
+function parseIntSafe(value: string, fallback: number) {
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function databaseError(): JudgeEntranceReport {
+  return { status: "error", message: "Database request failed. Try again." };
+}
+
+function sha256(value: string) {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+async function eventByKey() {
+  return prisma.event.findUnique({ where: { key: EVENT_KEY } });
+}
+
+async function toCriteriaViews(
+  eventId: string,
+): Promise<JudgeCriterionView[]> {
+  const rows = await prisma.judgingCriterion.findMany({
+    where: { eventId, active: true },
+    orderBy: { displayOrder: "asc" },
+  });
+  return rows.map((row) => ({
+    id: row.id,
+    key: row.key,
+    name: row.name,
+    description: row.description,
+    minScore: row.minScore,
+    maxScore: row.maxScore,
+    displayOrder: row.displayOrder,
+  }));
+}
+
+async function toEvaluationView(
+  eventId: string,
+  judgeAssignmentId: string,
+  teamId: number,
+): Promise<JudgeEvaluationView | null> {
+  const evaluation = await prisma.evaluation.findUnique({
+    where: {
+      eventId_judgeAssignmentId_teamId: {
+        eventId,
+        judgeAssignmentId,
+        teamId,
+      },
+    },
+    include: {
+      scores: { include: { criterion: true } },
+    },
+  });
+
+  if (!evaluation) return null;
+
+  return {
+    id: evaluation.id,
+    status: evaluation.status,
+    review: evaluation.review,
+    scores: evaluation.scores.map((score) => ({
+      criterionId: score.criterionId,
+      key: score.criterion.key,
+      score: score.score,
+    })),
+    total: evaluation.scores.reduce((sum, score) => sum + score.score, 0),
+    submittedAt: evaluation.submittedAt?.toISOString() ?? null,
+    updatedAt: evaluation.updatedAt.toISOString(),
+  };
+}
+
+async function resourcesView(event: { id: string; startingBudget: number }, teamId: number) {
+  const settlements = await prisma.settlement.findMany({
+    where: { teamId, capsule: { eventId: event.id } },
+    include: { capsule: true, subCapsule: true },
+    orderBy: [
+      { capsule: { sequenceOrder: "asc" } },
+      { subCapsule: { tierRank: "asc" } },
+    ],
+  });
+
+  const items: JudgeResourceItem[] = settlements.map((settlement) => ({
+    roundOrder: settlement.capsule.sequenceOrder,
+    roundName: settlement.capsule.name,
+    tierName: settlement.subCapsule.name,
+    pricePaid: settlement.pricePaid,
+    priceSource: settlement.priceSource,
+  }));
+
+  const spent = settlements.reduce((sum, s) => sum + s.pricePaid, 0);
+
+  return {
+    startingBudget: event.startingBudget,
+    spent,
+    remaining: event.startingBudget - spent,
+    items,
+  } satisfies JudgeResources;
 }
 
 // ---------------------------------------------------------------------------
-// Search teams
+// Session / identity
 // ---------------------------------------------------------------------------
 
-export async function searchJudgeTeamsAction(
-  query: string,
-  judgeName: string | null,
-): Promise<JudgeSearchResult> {
-  if (!process.env.DATABASE_URL) {
-    return { status: "error", message: DB_MISSING, teams: [] };
-  }
-
+export async function getJudgeSessionAction(
+  firebaseUid: string | null,
+): Promise<JudgeSessionResult> {
   try {
-    const q = query.trim();
-    const or = q
-      ? [
-          { name: { contains: q, mode: "insensitive" as const } },
-          { code: { contains: q, mode: "insensitive" as const } },
-          {
-            members: {
-              some: {
-                user: {
-                  name: { contains: q, mode: "insensitive" as const },
-                },
-              },
-            },
-          },
-          {
-            members: {
-              some: {
-                user: {
-                  email: {
-                    contains: q.toLowerCase(),
-                    mode: "insensitive" as const,
-                  },
-                },
-              },
-            },
-          },
-        ]
-      : [];
+    const event = await eventByKey();
 
-    const teams = await prisma.team.findMany({
-      where: or.length > 0 ? { OR: or } : undefined,
-      orderBy: [{ name: "asc" }],
-      take: 80,
-      relationLoadStrategy: "join",
-      include: {
-        leader: { select: { name: true } },
-        members: {
-          orderBy: { joinOrder: "asc" },
-          select: { user: { select: { name: true } } },
-        },
+    if (!event) {
+      return {
+        status: "denied",
+        message: "The event has not been prepared yet.",
+      };
+    }
+
+    if (!firebaseUid) {
+      return { status: "signed_out" };
+    }
+
+    const judge = await prisma.judgeProfile.findUnique({
+      where: { firebaseUid },
+    });
+
+    if (!judge) {
+      return { status: "no_profile" };
+    }
+
+    const assignment = await prisma.judgeEventAssignment.findUnique({
+      where: {
+        judgeId_eventId: { judgeId: judge.id, eventId: event.id },
       },
     });
 
-    let reviewedScores = new Map<number, number>();
-    if (judgeName) {
-      const rows = await prisma.judgeEvaluation.findMany({
-        where: { judgeName },
-        select: { teamId: true, totalScore: true },
-      });
-      reviewedScores = new Map(rows.map((r) => [r.teamId, r.totalScore]));
+    if (!assignment) {
+      return {
+        status: "denied",
+        message: "You are not assigned to judge this event yet.",
+      };
     }
+
+    if (assignment.status !== "ACTIVE") {
+      return {
+        status: "denied",
+        message: "Your judging access for this event is suspended.",
+      };
+    }
+
+    const criteria = await toCriteriaViews(event.id);
+
+    return {
+      status: "active",
+      message: `Signed in as ${judge.name}.`,
+      session: {
+        judgeId: judge.id,
+        judgeName: judge.name,
+        judgeEmail: judge.email,
+        assignmentId: assignment.id,
+        eventId: event.id,
+        eventName: event.name,
+        startingBudget: event.startingBudget,
+        criteria,
+        maxTotal: criteria.reduce((sum, c) => sum + c.maxScore, 0),
+      },
+    };
+  } catch {
+    return {
+      status: "denied",
+      message: "Could not check your judging access. Try again.",
+    };
+  }
+}
+
+export async function redeemJudgeInvitationAction(
+  _previousState: JudgeEntranceReport,
+  formData: FormData,
+): Promise<JudgeEntranceReport> {
+  const firebaseUid = field(formData, "firebaseUid");
+  const name = field(formData, "name");
+  const email = field(formData, "email");
+  const code = field(formData, "code");
+
+  if (!firebaseUid) {
+    return { status: "invalid", message: "Sign in with Google first." };
+  }
+
+  if (!code) {
+    return { status: "invalid", message: "Enter your invitation code." };
+  }
+
+  if (name.length > 80 || email.length > 254) {
+    return { status: "invalid", message: "Check your name and email." };
+  }
+
+  try {
+    const event = await eventByKey();
+    if (!event) {
+      return { status: "error", message: "The event has not been prepared yet." };
+    }
+
+    const hashCode = sha256(code.trim().toUpperCase());
+    const invitation = await prisma.judgeInvitation.findUnique({
+      where: { codeHash: hashCode },
+    });
+
+    if (!invitation || invitation.eventId !== event.id) {
+      return {
+        status: "invalid",
+        message: "That invitation code is not valid for this event.",
+      };
+    }
+
+    if (invitation.usedAt) {
+      return {
+        status: "invalid",
+        message: "That invitation code has already been used.",
+      };
+    }
+
+    if (invitation.expiresAt && invitation.expiresAt.getTime() < Date.now()) {
+      return {
+        status: "invalid",
+        message: "That invitation code has expired.",
+      };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const judge = await tx.judgeProfile.upsert({
+        where: { firebaseUid },
+        update: { name: name || undefined, email: email || undefined },
+        create: { firebaseUid, name: name || "Judge", email: email || `${firebaseUid}@judge.local` },
+      });
+
+      const application = await tx.judgeApplication.upsert({
+        where: {
+          eventId_firebaseUid: { eventId: event.id, firebaseUid },
+        },
+        update: {
+          name: name || undefined,
+          email: email || undefined,
+          invitationId: invitation.id,
+          judgeId: judge.id,
+          status: "APPROVED",
+          reviewedAt: new Date(),
+        },
+        create: {
+          eventId: event.id,
+          invitationId: invitation.id,
+          firebaseUid,
+          name: name || "Judge",
+          email: email || `${firebaseUid}@judge.local`,
+          status: "APPROVED",
+          reviewedAt: new Date(),
+          judgeId: judge.id,
+        },
+      });
+
+      await tx.judgeEventAssignment.upsert({
+        where: {
+          judgeId_eventId: { judgeId: judge.id, eventId: event.id },
+        },
+        update: { status: "ACTIVE" },
+        create: {
+          judgeId: judge.id,
+          eventId: event.id,
+          status: "ACTIVE",
+        },
+      });
+
+      await tx.judgeInvitation.update({
+        where: { id: invitation.id },
+        data: { usedAt: new Date() },
+      });
+
+      return application;
+    });
+
+    return { status: "success", message: "Invitation redeemed. You can now judge." };
+  } catch (error) {
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return {
+        status: "invalid",
+        message: "That code has already been redeemed or this account is already registered.",
+      };
+    }
+    return databaseError();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Search
+// ---------------------------------------------------------------------------
+
+export async function searchJudgeTeamsAction(
+  firebaseUid: string | null,
+  queryValue: string,
+): Promise<JudgeSearchResult> {
+  try {
+    const event = await eventByKey();
+    if (!event) {
+      return { status: "error", message: "The event has not been prepared yet.", teams: [] };
+    }
+
+    if (!firebaseUid) {
+      return { status: "error", message: "Sign in to browse teams.", teams: [] };
+    }
+
+    const judge = await prisma.judgeProfile.findUnique({
+      where: { firebaseUid },
+    });
+    if (!judge) {
+      return { status: "error", message: "Your judge profile is not registered.", teams: [] };
+    }
+
+    const assignment = await prisma.judgeEventAssignment.findUnique({
+      where: { judgeId_eventId: { judgeId: judge.id, eventId: event.id } },
+    });
+    if (!assignment || assignment.status !== "ACTIVE") {
+      return { status: "error", message: "You are not an active judge for this event.", teams: [] };
+    }
+
+    const query = queryValue.trim();
+
+    const where: Prisma.TeamWhereInput = {
+      eventId: event.id,
+      ...(query
+        ? {
+            OR: [
+              { name: { contains: query, mode: "insensitive" } },
+              { code: { contains: query, mode: "insensitive" } },
+              {
+                members: {
+                  some: {
+                    user: {
+                      OR: [
+                        { name: { contains: query, mode: "insensitive" } },
+                        { email: { contains: query, mode: "insensitive" } },
+                      ],
+                    },
+                  },
+                },
+              },
+            ],
+          }
+        : {}),
+    };
+
+    const teams = await prisma.team.findMany({
+      where,
+      include: {
+        leader: true,
+        members: {
+          include: { user: true },
+          orderBy: { joinOrder: "asc" },
+        },
+      },
+      orderBy: { name: "asc" },
+      take: 200,
+    });
+
+    const evaluations = await prisma.evaluation.findMany({
+      where: {
+        eventId: event.id,
+        judgeAssignmentId: assignment.id,
+        teamId: { in: teams.map((t) => t.id) },
+      },
+      include: { scores: true },
+    });
+
+    const totalsByTeam = new Map(
+      evaluations.map((evaluation) => [
+        evaluation.teamId,
+        evaluation.scores.reduce((sum, score) => sum + score.score, 0),
+      ]),
+    );
 
     return {
       status: "success",
-      message: "",
+      message: `Found ${teams.length} team${teams.length === 1 ? "" : "s"}.`,
       teams: teams.map((team) => ({
         id: team.id,
         name: team.name,
         code: team.code,
         leaderName: team.leader.name,
-        memberNames: team.members.map((m) => m.user.name),
-        reviewedScore: reviewedScores.get(team.id) ?? null,
+        memberNames: team.members.map((member) => member.user.name),
+        reviewedScore: totalsByTeam.get(team.id) ?? null,
       })),
     };
-  } catch (error) {
-    console.error("searchJudgeTeamsAction failed:", error);
-    return {
-      status: "error",
-      message: "Could not search teams right now. Try again.",
-      teams: [],
-    };
+  } catch {
+    return { status: "error", message: "Could not load teams.", teams: [] };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Fetch full review context for a team
+// Review context
 // ---------------------------------------------------------------------------
 
 export async function getJudgeReviewAction(
-  teamId: number,
-  judgeName: string | null,
-): Promise<JudgeReviewResult> {
-  if (!process.env.DATABASE_URL) {
-    return { status: "error", message: DB_MISSING, context: null };
-  }
-
+  firebaseUid: string | null,
+  teamIdValue: number,
+): Promise<
+  | { status: "success"; context: JudgeReviewContext }
+  | { status: "error"; message: string; context: null }
+> {
   try {
+    const event = await eventByKey();
+    if (!event) {
+      return { status: "error", message: "The event has not been prepared yet.", context: null };
+    }
+
+    if (!firebaseUid) {
+      return { status: "error", message: "Sign in to review a team.", context: null };
+    }
+
+    const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid } });
+    if (!judge) {
+      return { status: "error", message: "Your judge profile is not registered.", context: null };
+    }
+
+    const assignment = await prisma.judgeEventAssignment.findUnique({
+      where: { judgeId_eventId: { judgeId: judge.id, eventId: event.id } },
+    });
+    if (!assignment || assignment.status !== "ACTIVE") {
+      return { status: "error", message: "You are not an active judge for this event.", context: null };
+    }
+
     const team = await prisma.team.findUnique({
-      where: { id: teamId },
-      relationLoadStrategy: "join",
+      where: { id_eventId: { id: teamIdValue, eventId: event.id } },
       include: {
-        leader: { select: { name: true, email: true } },
+        leader: true,
         members: {
+          include: { user: true },
           orderBy: { joinOrder: "asc" },
-          include: {
-            user: { select: { name: true, email: true } },
-          },
         },
       },
     });
 
     if (!team) {
-      return {
-        status: "error",
-        message: "That team no longer exists.",
-        context: null,
-      };
+      return { status: "error", message: "That team was not found in this event.", context: null };
     }
 
-    const [settlements, evaluation] = await Promise.all([
-      prisma.settlement.findMany({
-        where: { teamId },
-        orderBy: { capsule: { sequenceOrder: "asc" } },
-        relationLoadStrategy: "join",
-        include: {
-          capsule: { select: { key: true, name: true, sequenceOrder: true } },
-          subCapsule: { select: { name: true } },
-        },
-      }),
-      judgeName
-        ? prisma.judgeEvaluation.findUnique({
-            where: {
-              teamId_judgeName: { teamId, judgeName },
-            },
-          })
-        : Promise.resolve(null),
+    const [resources, evaluation] = await Promise.all([
+      resourcesView(event, team.id),
+      toEvaluationView(event.id, assignment.id, team.id),
     ]);
 
-    const spent = settlements.reduce((sum, s) => sum + s.pricePaid, 0);
-
-    const context: JudgeReviewContext = {
-      team: {
-        id: team.id,
-        name: team.name,
-        code: team.code,
-        leadName: team.leader.name,
-        leadEmail: team.leader.email,
-        members: team.members.map((m) => ({
-          name: m.user.name,
-          email: m.user.email,
-          isLeader: m.userId === team.leaderId,
-        })),
-      },
-      resources: {
-        startingBudget: STARTING_BALANCE,
-        spent,
-        remaining: STARTING_BALANCE - spent,
-        items: settlements.map((s) => ({
-          roundOrder: s.capsule.sequenceOrder,
-          roundName: s.capsule.name,
-          tierName: s.subCapsule.name,
-          pricePaid: s.pricePaid,
-          priceSource: s.priceSource,
-          settledAt: s.settledAt.toISOString(),
-        })),
-      },
-      evaluation: evaluation ? toEvaluationView(evaluation) : null,
-    };
-
-    return { status: "success", message: "", context };
-  } catch (error) {
-    console.error("getJudgeReviewAction failed:", error);
     return {
-      status: "error",
-      message: "Could not load team data. Try again.",
-      context: null,
+      status: "success",
+      context: {
+        team: {
+          id: team.id,
+          name: team.name,
+          code: team.code,
+          members: team.members.map((member) => ({
+            name: member.user.name,
+            email: member.user.email,
+            isLeader: member.userId === team.leaderId,
+          })),
+        },
+        resources,
+        evaluation,
+      },
     };
+  } catch {
+    return { status: "error", message: "Could not load team data.", context: null };
   }
 }
 
 // ---------------------------------------------------------------------------
-// Verify judge access
-// ---------------------------------------------------------------------------
-
-export async function verifyJudgeAccessAction(
-  judgeName: string,
-  passcode: string,
-): Promise<JudgeAccessReport> {
-  if (!process.env.DATABASE_URL) {
-    return { ok: false, message: DB_MISSING };
-  }
-
-  const name = judgeName.trim();
-  if (!name) {
-    return { ok: false, message: "Enter your name so reviews are saved to you." };
-  }
-  if (name.length > 80) {
-    return { ok: false, message: "Name is too long (max 80 characters)." };
-  }
-
-  if (judgePasscodeConfigured()) {
-    const envCode = process.env.JUDGE_PASSCODE!;
-    if (passcode.trim() !== envCode) {
-      return { ok: false, message: "That passcode is not recognised." };
-    }
-  }
-
-  return { ok: true, message: `Signed in as ${name}.` };
-}
-
-// ---------------------------------------------------------------------------
-// Submit / update evaluation
+// Submit / update
 // ---------------------------------------------------------------------------
 
 export async function submitJudgeEvaluationAction(
   formData: FormData,
 ): Promise<JudgeSubmitReport> {
-  try {
-    if (!process.env.DATABASE_URL) {
-      return { status: "error", message: DB_MISSING, evaluation: null };
-    }
+  const firebaseUid = field(formData, "firebaseUid");
+  const teamId = parseIntSafe(field(formData, "teamId"), Number.NaN);
+  const review = formData.get("review");
+  const reviewText = typeof review === "string" ? review : "";
+  const scoresRaw = field(formData, "scores");
 
-    const teamIdRaw = field(formData, "teamId");
-    const teamId = Number.parseInt(teamIdRaw, 10);
-    const judgeName = field(formData, "judgeName");
-    const passcode = field(formData, "passcode");
-
-    if (!Number.isInteger(teamId) || teamId <= 0) {
-      return invalid("That team is not valid.");
-    }
-    if (!judgeName) {
-      return invalid("Enter your judge name before submitting.");
-    }
-    if (judgeName.length > 80) {
-      return invalid("Judge name is too long (max 80 characters).");
-    }
-
-    if (judgePasscodeConfigured()) {
-      if (passcode !== process.env.JUDGE_PASSCODE) {
-        return invalid("The judge passcode is not correct.");
-      }
-    }
-
-    const scores: Record<CriterionKey, number> = {
-      problemMarketScore: 0,
-      saasPotentialScore: 0,
-      productExecutionScore: 0,
-      innovationScore: 0,
-      resourceUtilizationScore: 0,
+  if (!firebaseUid || Number.isNaN(teamId)) {
+    return {
+      status: "invalid",
+      message: "Sign in and pick a team before submitting.",
+      evaluation: null,
     };
+  }
 
-    for (const criterion of CRITERIA) {
-      const raw = field(formData, criterion.key);
-      if (!/^\d+$/.test(raw)) {
-        return invalid(
-          `"${criterion.name}" requires a whole number (0\u2013${criterion.max}).`,
-        );
-      }
-      const value = Number.parseInt(raw, 10);
-      if (!Number.isInteger(value) || value < 0 || value > criterion.max) {
-        return invalid(
-          `"${criterion.name}" must be between 0 and ${criterion.max} (you entered ${value}).`,
-        );
-      }
-      scores[criterion.key] = value;
+  try {
+    const event = await eventByKey();
+    if (!event) {
+      return { status: "error", message: "The event has not been prepared yet.", evaluation: null };
     }
 
-    const total = CRITERIA.reduce(
-      (sum, c) => sum + scores[c.key],
-      0,
-    );
+    const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid } });
+    if (!judge) {
+      return { status: "error", message: "Your judge profile is not registered.", evaluation: null };
+    }
+
+    const assignment = await prisma.judgeEventAssignment.findUnique({
+      where: { judgeId_eventId: { judgeId: judge.id, eventId: event.id } },
+    });
+    if (!assignment) {
+      return { status: "error", message: "You are not assigned to this event.", evaluation: null };
+    }
+    if (assignment.status !== "ACTIVE") {
+      return {
+        status: "invalid",
+        message: "Your judging access for this event is suspended.",
+        evaluation: null,
+      };
+    }
 
     const team = await prisma.team.findUnique({
-      where: { id: teamId },
+      where: { id_eventId: { id: teamId, eventId: event.id } },
       select: { id: true },
     });
-
     if (!team) {
-      return invalid("That team no longer exists.");
+      return { status: "invalid", message: "That team does not belong to this event.", evaluation: null };
     }
 
-    const data = {
-      problemMarketScore: scores.problemMarketScore,
-      saasPotentialScore: scores.saasPotentialScore,
-      productExecutionScore: scores.productExecutionScore,
-      innovationScore: scores.innovationScore,
-      resourceUtilizationScore: scores.resourceUtilizationScore,
-      totalScore: total,
-    };
+    const criteria = await toCriteriaViews(event.id);
+    if (criteria.length === 0) {
+      return { status: "error", message: "No judging criteria have been configured yet.", evaluation: null };
+    }
 
-    const existing = await prisma.judgeEvaluation.findUnique({
-      where: { teamId_judgeName: { teamId, judgeName } },
-      select: { id: true },
+    let parsedScores: Record<string, unknown>;
+    try {
+      parsedScores = JSON.parse(scoresRaw || "{}");
+    } catch {
+      return { status: "invalid", message: "Scores could not be read.", evaluation: null };
+    }
+
+    // Validate every active criterion has an integer within its DB range.
+    const scores: Record<string, number> = {};
+    for (const criterion of criteria) {
+      const raw = parsedScores[criterion.id];
+      const value = typeof raw === "string" ? Number.parseInt(raw, 10) : raw;
+      if (typeof value !== "number" || !Number.isInteger(value)) {
+        return {
+          status: "invalid",
+          message: `Give ${criterion.name} a score before submitting.`,
+          evaluation: null,
+        };
+      }
+      if (value < criterion.minScore || value > criterion.maxScore) {
+        return {
+          status: "invalid",
+          message: `${criterion.name} must be between ${criterion.minScore} and ${criterion.maxScore}.`,
+          evaluation: null,
+        };
+      }
+      scores[criterion.id] = value;
+    }
+
+    const knownIds = new Set(criteria.map((c) => c.id));
+    for (const id of Object.keys(parsedScores)) {
+      if (!knownIds.has(id)) {
+        return { status: "invalid", message: "An unknown criterion was submitted.", evaluation: null };
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      const evaluation = await tx.evaluation.upsert({
+        where: {
+          eventId_judgeAssignmentId_teamId: {
+            eventId: event.id,
+            judgeAssignmentId: assignment.id,
+            teamId,
+          },
+        },
+        update: {
+          review: reviewText || null,
+          status: "SUBMITTED",
+          submittedAt: new Date(),
+        },
+        create: {
+          eventId: event.id,
+          judgeAssignmentId: assignment.id,
+          teamId,
+          review: reviewText || null,
+          status: "SUBMITTED",
+          submittedAt: new Date(),
+        },
+      });
+
+      await tx.evaluationScore.deleteMany({
+        where: { evaluationId: evaluation.id },
+      });
+
+      await tx.evaluationScore.createMany({
+        data: criteria.map((criterion) => ({
+          evaluationId: evaluation.id,
+          criterionId: criterion.id,
+          eventId: event.id,
+          score: scores[criterion.id],
+        })),
+      });
     });
 
-    let saved;
-    if (existing) {
-      saved = await prisma.judgeEvaluation.update({
-        where: { id: existing.id },
-        data,
-      });
-    } else {
-      saved = await prisma.judgeEvaluation.create({
-        data: { teamId, judgeName, ...data },
-      });
-    }
-
-    revalidatePath("/judge");
-
-    const message = existing
-      ? `Evaluation for "${teamId}" updated \u2014 ${total}/100.`
-      : `Evaluation saved \u2014 ${total}/100.`;
+    const evaluationView = await toEvaluationView(event.id, assignment.id, teamId);
 
     return {
       status: "success",
-      message,
-      evaluation: toEvaluationView(saved),
+      message: "Evaluation saved.",
+      evaluation: evaluationView,
     };
-  } catch (error) {
-    console.error("submitJudgeEvaluationAction failed:", error);
+  } catch {
     return {
       status: "error",
-      message: "Server error while saving your evaluation. Try again.",
+      message: "A server error occurred. Try again.",
       evaluation: null,
     };
   }

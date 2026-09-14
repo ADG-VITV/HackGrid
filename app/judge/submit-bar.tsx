@@ -4,19 +4,19 @@ import type { JudgeSubmitReport } from "./actions";
 
 export function SubmitBar({
   total,
+  maxTotal,
   complete,
   isUpdate,
   pending,
-  granted,
   feedback,
   onFindTeam,
   onSubmit,
 }: {
   total: number;
+  maxTotal: number;
   complete: boolean;
   isUpdate: boolean;
   pending: boolean;
-  granted: boolean;
   feedback: JudgeSubmitReport | null;
   onFindTeam: () => void;
   onSubmit: () => void;
@@ -40,7 +40,7 @@ export function SubmitBar({
                 {total}
               </span>
               <span className="font-mono text-sm text-zinc-600">
-                / 100
+                / {maxTotal}
               </span>
             </div>
 
@@ -53,24 +53,18 @@ export function SubmitBar({
                 Find Another Team
               </button>
 
-              {!granted ? (
-                <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.06] px-4 py-2.5 text-xs font-semibold text-amber-300">
-                  Enter your judge name and passcode to submit
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={onSubmit}
-                  disabled={!complete || pending}
-                  className="rounded-xl border border-[#42ff5a]/50 bg-[#42ff5a]/10 px-6 py-2.5 text-sm font-semibold text-[#42ff5a] transition hover:bg-[#42ff5a]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
-                >
-                  {pending
-                    ? "Saving..."
-                    : isUpdate
-                      ? "Update Evaluation"
-                      : "Submit Evaluation"}
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={onSubmit}
+                disabled={!complete || pending}
+                className="rounded-xl border border-[#42ff5a]/50 bg-[#42ff5a]/10 px-6 py-2.5 text-sm font-semibold text-[#42ff5a] transition hover:bg-[#42ff5a]/20 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40 disabled:active:scale-100"
+              >
+                {pending
+                  ? "Saving..."
+                  : isUpdate
+                    ? "Update Evaluation"
+                    : "Submit Evaluation"}
+              </button>
             </div>
           </div>
 
