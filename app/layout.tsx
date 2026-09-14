@@ -20,7 +20,7 @@ export const metadata: Metadata = {
   title: "HackGrid",
   description: "Created with love by ADG",
   icons: {
-    icon: "/logo.png",
+    icon: "/favicon2.svg",
   },
 };
 
