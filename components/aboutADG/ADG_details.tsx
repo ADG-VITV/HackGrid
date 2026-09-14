@@ -1,15 +1,42 @@
-import React from "react";
+import {
+  Body,
+  GlowSection,
+  Lead,
+  NeonLine,
+  SectionBody,
+  SectionTitle,
+  StatGrid,
+} from "@/components/ui/GlowSection";
 
-function ADG_details() {
+export default function ADG_details() {
   return (
-    <section
-      id="about-adg"
-      className="relative flex min-h-screen w-full items-center justify-center bg-black text-white"
-    >
-      {/* TODO(rishi): add About ADG content here */}
-      <div>rishi add about adg here</div>
-    </section>
+    <GlowSection id="about-adg" watermark="ADG">
+      <SectionTitle eyebrow="WE ARE" tagline="INNOVATE. COLLABORATE. IMPACT.">
+        <span className="block">THIS IS</span>
+        <NeonLine>
+          ADG<span className="text-white">!!</span>
+        </NeonLine>
+      </SectionTitle>
+
+      <SectionBody>
+        <Lead>
+          Advanced Developers Group is a technology-focused student club for
+          passionate developers, innovators, and tech enthusiasts.
+        </Lead>
+        <Body>
+          We provide a platform for students to explore emerging technologies,
+          strengthen their technical skills, and turn bold ideas into
+          real-world projects.
+        </Body>
+
+        <StatGrid
+          items={[
+            { index: "01", value: "LEARN", label: "Explore emerging tech" },
+            { index: "02", value: "BUILD", label: "Strengthen your skills" },
+            { index: "03", value: "CREATE", label: "Make an impact" },
+          ]}
+        />
+      </SectionBody>
+    </GlowSection>
   );
 }
-
-export default ADG_details;
