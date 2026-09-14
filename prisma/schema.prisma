@@ -26,15 +26,17 @@ model User {
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
 
-  memberships TeamMember[]
-  ledTeams    Team[]
+  /// A participant may belong to one team only.
+  membership TeamMember?
+  /// A participant may lead one team only.
+  ledTeam    Team?
 
   @@map("users")
 }
 
 model Team {
   id        Int      @id @default(autoincrement())
-  leaderId  Int
+  leaderId  Int      @unique
   createdAt DateTime @default(now()) @db.Timestamptz(3)
   updatedAt DateTime @updatedAt @db.Timestamptz(3)
   code      String   @unique @db.VarChar(16)
@@ -50,14 +52,13 @@ model Team {
   settlements        Settlement[]
   judgeEvaluations   JudgeEvaluation[]
 
-  @@index([leaderId])
   @@index([eventId])
   @@map("teams")
 }
 
 model TeamMember {
   teamId    Int
-  userId    Int
+  userId    Int      @unique
   joinOrder Int      @db.SmallInt
   joinedAt  DateTime @default(now()) @db.Timestamptz(3)
 
@@ -66,7 +67,6 @@ model TeamMember {
 
   @@id([teamId, userId])
   @@unique([teamId, joinOrder])
-  @@index([userId])
   @@map("team_members")
 }
 
