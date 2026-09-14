@@ -35,6 +35,10 @@ export type ResetCapsuleResult =
   | { status: "error"; message: string }
   | { status: "success"; message: string; capsuleId: string };
 
+export type ResetPodResult =
+  | { status: "error"; message: string }
+  | { status: "success"; message: string; capsuleId: string; podId: string };
+
 export function ensureEvent(prisma: AnyPrisma): Promise<{ id: string; key: string }>;
 
 export function ensureCapsule(
@@ -55,7 +59,7 @@ export function openRemainderPod(
   prisma: AnyPrisma,
   capsuleId: string,
 ): Promise<{
-  podId: string;
+  podIds: string[];
   lotIds: string[];
   prices: { subCapsuleId: string; avgPrice: number; podsCounted: number; source: string }[];
 } | null>;
@@ -118,6 +122,7 @@ export type BiddingContextResult = {
 
 export type AdminContextResult = {
   teamCount: number;
+  teams: Array<{ id: number; name: string; code: string; leadName: string; leadEmail: string }>;
   event: {
     startingBudget: number;
     preparedCapsules: number;
@@ -177,10 +182,50 @@ export function getAdminEventContext(prisma: AnyPrisma): Promise<AdminContextRes
 
 export function resetEvent(prisma: AnyPrisma): Promise<{ removed: number }>;
 
+export function createManualPod(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+  podNumber: number,
+  kind?: "MAIN" | "REMAINDER",
+): Promise<{ status: "success" | "error"; message: string; podId?: string }>;
+
+export function addTeamToPod(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+  podId: string,
+  teamId: number,
+): Promise<{ status: "success" | "error"; message: string }>;
+
+export function removeTeamFromPod(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+  podId: string,
+  teamId: number,
+): Promise<{ status: "success" | "error"; message: string }>;
+
+export function deleteManualPod(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+  podId: string,
+): Promise<{ status: "success" | "error"; message: string }>;
+
+export function setPodRemainderFlag(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+  podId: string,
+  flagged: boolean,
+): Promise<{ status: "success" | "error"; message: string }>;
+
 export function resetCapsule(
   prisma: AnyPrisma,
   capsuleKey: string,
 ): Promise<ResetCapsuleResult>;
+
+export function resetPod(
+  prisma: AnyPrisma,
+  capsuleKey: string,
+  podId: string,
+): Promise<ResetPodResult>;
 
 export function resetSubCapsule(
   prisma: AnyPrisma,

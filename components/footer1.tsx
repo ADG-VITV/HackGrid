@@ -2,14 +2,16 @@
 
 import React from 'react';
 import Image from 'next/image';
-import BulgeGrid from './BulgeGrid';
 import {
   IconPhone,
   IconInstagram,
   IconLinkedIn,
   IconX,
+  IconDiscord,
   IconEmail,
 } from './FooterIcons';
+
+const DISCORD_SERVER_URL = 'https://discord.gg/5c9MKm5Sd';
 
 export default function Footer(): React.JSX.Element {
   const scrollToTop = (): void => {
@@ -17,23 +19,22 @@ export default function Footer(): React.JSX.Element {
   };
 
   return (
-    <footer className="relative w-full min-h-screen overflow-hidden bg-black text-white font-sans selection:bg-[#42ff5a] selection:text-black flex flex-col justify-end">
-      {/* 1. Full-Screen Interactive Canvas */}
-      <BulgeGrid />
+    <footer className="relative w-full min-h-screen overflow-hidden bg-transparent text-white font-sans selection:bg-[#42ff5a] selection:text-black flex flex-col justify-end">
+      {/* The shared page-level BulgeGrid remains visible below these footer-only effects. */}
 
-      {/* 2. Deep Radar Floor Ambience */}
+      {/* 1. Deep Radar Floor Ambience */}
       <div
         className="pointer-events-none absolute inset-0 z-[1] [background:radial-gradient(130%_65%_at_50%_100%,rgba(16,110,45,0.55)_0%,rgba(8,60,26,0.3)_40%,transparent_80%)]"
         aria-hidden="true"
       />
 
-      {/* 3. Screen Bloom behind the logo and texts */}
+      {/* 2. Screen Bloom behind the logo and texts */}
       <div
         className="pointer-events-none absolute inset-0 z-[2] mix-blend-screen [background:radial-gradient(85%_48%_at_50%_92%,rgba(66,255,90,0.28)_0%,rgba(20,120,50,0.12)_45%,transparent_75%)]"
         aria-hidden="true"
       />
 
-      {/* 4. Edge-to-Edge Lateral Floor Flare */}
+      {/* 3. Edge-to-Edge Lateral Floor Flare */}
       <div
         className="pointer-events-none absolute inset-x-0 bottom-0 z-[3] h-52 bg-gradient-to-t from-[#20bd44]/35 via-[#16a34a]/15 to-transparent"
         aria-hidden="true"
@@ -43,7 +44,7 @@ export default function Footer(): React.JSX.Element {
         aria-hidden="true"
       />
 
-      {/* 5. Main Content Stack */}
+      {/* 4. Main Content Stack */}
       <div className="relative z-10 mx-auto flex min-h-screen w-full max-w-7xl flex-col items-center justify-end px-4 pb-8 pt-16 sm:px-6">
         
         {/* HACKGRID '26 LOGO */}
@@ -143,6 +144,15 @@ export default function Footer(): React.JSX.Element {
               className="text-neutral-400 transition-all duration-200 hover:-translate-y-0.5 hover:text-[#42ff5a]"
             >
               <IconX className="h-5 w-5" />
+            </a>
+            <a
+              href={DISCORD_SERVER_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Discord"
+              className="text-neutral-400 transition-all duration-200 hover:-translate-y-0.5 hover:text-[#42ff5a]"
+            >
+              <IconDiscord className="h-5 w-5" />
             </a>
             <a
               href="mailto:ios@vit.ac.in"

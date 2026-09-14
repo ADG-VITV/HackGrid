@@ -3,10 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import {
+  addTeamToPod,
+  createManualPod,
+  deleteManualPod,
   getAdminEventContext,
+  removeTeamFromPod,
   resetCapsule,
   resetEvent,
+  resetPod,
   resetSubCapsule,
+  setPodRemainderFlag,
   startCapsule,
   startEvent,
 } from "@/lib/auction-engine.mjs";
@@ -15,6 +21,7 @@ export type AdminReport = { status: "success" | "error"; message: string };
 
 export type AdminContext = {
   teamCount: number;
+  teams: Array<{ id: number; name: string; code: string; leadName: string; leadEmail: string }>;
   event: {
     startingBudget: number;
     preparedCapsules: number;
@@ -32,17 +39,23 @@ export type AdminContext = {
     memberCount: number;
     settlementCount: number;
     pods: Array<{
+      id: string;
       label: string;
       kind: "MAIN" | "REMAINDER";
       auctionStatus: "PENDING" | "WAITING_FOR_TEAMS" | "LIVE" | "COMPLETE";
       activeItemName: string | null;
       settledLots: number;
       lotCount: number;
+      /** Teams with a live socket in this pod room right now. */
+      onlineCount: number;
       teams: Array<{
         id: number;
         name: string;
         code: string;
+        leadName: string;
+        leadEmail: string;
         seat: number;
+        online: boolean;
         item: {
           name: string;
           tierRank: number;
@@ -71,8 +84,37 @@ async function refreshAdmin() {
   revalidatePath("/bidding");
 }
 
+type Hub = {
+  onCapsuleStarted?: (id: string) => Promise<void>;
+  announceCapsuleStarted?: (id: string) => Promise<void>;
+  onEventReset?: () => void;
+  onPodReset?: (id: string) => Promise<void>;
+  onlineTeamsByPod?: () => Promise<Map<string, Set<number>>>;
+};
+
+/** The Socket.IO hub shares this process (server.mjs); absent under plain `next dev`. */
+function getHub() {
+  return (globalThis as { __hackgridAuctionHub?: Hub }).__hackgridAuctionHub;
+}
+
 export async function getAdminContextAction(): Promise<AdminContext> {
-  return (await getAdminEventContext(prisma)) as AdminContext;
+  // Presence is the same signal the bidding page paints its green dots from:
+  // a team is "online" when it holds a socket in its pod room. Only the live
+  // round's pods can have sockets, so every other pod simply reads as empty.
+  const [context, onlineByPod] = await Promise.all([
+    getAdminEventContext(prisma) as Promise<AdminContext>,
+    getHub()?.onlineTeamsByPod?.().catch(() => null) ?? Promise.resolve(null),
+  ]);
+
+  for (const capsule of context.capsules) {
+    for (const pod of capsule.pods) {
+      const online = onlineByPod?.get(pod.id) ?? new Set<number>();
+      pod.teams = pod.teams.map((team) => ({ ...team, online: online.has(team.id) }));
+      pod.onlineCount = pod.teams.filter((team) => team.online).length;
+    }
+  }
+
+  return context;
 }
 
 export async function startEventAdminAction(): Promise<AdminReport> {
@@ -82,14 +124,8 @@ export async function startEventAdminAction(): Promise<AdminReport> {
   return report;
 }
 
-type Hub = {
-  onCapsuleStarted?: (id: string) => Promise<void>;
-  announceCapsuleStarted?: (id: string) => Promise<void>;
-  onEventReset?: () => void;
-};
-
 async function notifyHub(capsuleId: string) {
-  const hub = (globalThis as { __hackgridAuctionHub?: Hub }).__hackgridAuctionHub;
+  const hub = getHub();
   if (hub?.announceCapsuleStarted) {
     await hub.announceCapsuleStarted(capsuleId).catch(() => undefined);
     return;
@@ -98,8 +134,7 @@ async function notifyHub(capsuleId: string) {
 }
 
 function notifyReset() {
-  const hub = (globalThis as { __hackgridAuctionHub?: Hub }).__hackgridAuctionHub;
-  hub?.onEventReset?.();
+  getHub()?.onEventReset?.();
 }
 
 export async function startRoundAction(capsuleKey: string): Promise<AdminReport> {
@@ -128,6 +163,67 @@ export async function resetCapsuleAction(capsuleKey: string): Promise<AdminRepor
     else notifyReset();
     await refreshAdmin();
   }
+  return report;
+}
+
+export async function resetPodAction(capsuleKey: string, podId: string): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await resetPod(prisma, capsuleKey, podId);
+  if (report.status === "success") {
+    await getHub()?.onPodReset?.(report.podId).catch(() => undefined);
+    await refreshAdmin();
+  }
+  return report;
+}
+
+export async function createManualPodAction(
+  capsuleKey: string,
+  podNumber: number,
+  isRemainder: boolean,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await createManualPod(prisma, capsuleKey, podNumber, isRemainder ? "REMAINDER" : "MAIN");
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function addTeamToPodAction(
+  capsuleKey: string,
+  podId: string,
+  teamId: number,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await addTeamToPod(prisma, capsuleKey, podId, teamId);
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function removeTeamFromPodAction(
+  capsuleKey: string,
+  podId: string,
+  teamId: number,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await removeTeamFromPod(prisma, capsuleKey, podId, teamId);
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function deleteManualPodAction(capsuleKey: string, podId: string): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await deleteManualPod(prisma, capsuleKey, podId);
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function setPodRemainderFlagAction(
+  capsuleKey: string,
+  podId: string,
+  flagged: boolean,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await setPodRemainderFlag(prisma, capsuleKey, podId, flagged);
+  if (report.status === "success") await refreshAdmin();
   return report;
 }
 
