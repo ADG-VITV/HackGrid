@@ -4,7 +4,7 @@ import { useState } from "react";
 import type { TeamOption } from "./actions";
 
 /**
- * Who is sitting in the Remainder Pod this round.
+ * Who is sitting in the pod flagged lucky/remainder this round.
  *
  * Development only. The point is not to watch their room from here — for that
  * you open another browser tab and pick the team from "Acting as". This just
@@ -13,6 +13,7 @@ import type { TeamOption } from "./actions";
  */
 export function SecondView({ teams }: { teams: TeamOption[] }) {
   const remainder = teams.filter((team) => team.podKind === "REMAINDER");
+  const remainderLabel = remainder[0]?.podLabel ?? "Lucky / remainder pod";
   const seated = teams.filter((team) => team.podLabel).length;
   const [copied, setCopied] = useState<number | null>(null);
 
@@ -30,7 +31,7 @@ export function SecondView({ teams }: { teams: TeamOption[] }) {
     <section className="rounded-2xl border border-amber-500/25 bg-amber-500/[0.03] p-4">
       <div className="flex items-center justify-between">
         <h3 className="text-[0.65rem] font-semibold tracking-[0.16em] text-amber-400/80 uppercase">
-          Remainder Pod
+          {remainderLabel} · lucky / remainder
         </h3>
         <span className="font-mono text-[0.55rem] tracking-wide text-zinc-600 uppercase">
           dev only

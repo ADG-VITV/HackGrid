@@ -199,7 +199,7 @@ export async function resetEventAction(): Promise<StartReport> {
 
 /**
  * Dev-only "act as" picker source. Each team carries its seat in the live
- * round, so the picker can show who is in the Remainder Pod and the second
+ * round, so the picker can show who is in the lucky/remainder pod and the second
  * view can default to one of them.
  */
 export async function listTeamsAction(): Promise<TeamOption[]> {

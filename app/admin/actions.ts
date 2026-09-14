@@ -3,10 +3,16 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import {
+  addTeamToPod,
+  createManualPod,
+  deleteManualPod,
   getAdminEventContext,
+  removeTeamFromPod,
   resetCapsule,
   resetEvent,
+  resetPod,
   resetSubCapsule,
+  setPodRemainderFlag,
   startCapsule,
   startEvent,
 } from "@/lib/auction-engine.mjs";
@@ -15,6 +21,7 @@ export type AdminReport = { status: "success" | "error"; message: string };
 
 export type AdminContext = {
   teamCount: number;
+  teams: Array<{ id: number; name: string; code: string; leadName: string; leadEmail: string }>;
   event: {
     startingBudget: number;
     preparedCapsules: number;
@@ -81,6 +88,7 @@ type Hub = {
   onCapsuleStarted?: (id: string) => Promise<void>;
   announceCapsuleStarted?: (id: string) => Promise<void>;
   onEventReset?: () => void;
+  onPodReset?: (id: string) => Promise<void>;
   onlineTeamsByPod?: () => Promise<Map<string, Set<number>>>;
 };
 
@@ -155,6 +163,67 @@ export async function resetCapsuleAction(capsuleKey: string): Promise<AdminRepor
     else notifyReset();
     await refreshAdmin();
   }
+  return report;
+}
+
+export async function resetPodAction(capsuleKey: string, podId: string): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await resetPod(prisma, capsuleKey, podId);
+  if (report.status === "success") {
+    await getHub()?.onPodReset?.(report.podId).catch(() => undefined);
+    await refreshAdmin();
+  }
+  return report;
+}
+
+export async function createManualPodAction(
+  capsuleKey: string,
+  podNumber: number,
+  isRemainder: boolean,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await createManualPod(prisma, capsuleKey, podNumber, isRemainder ? "REMAINDER" : "MAIN");
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function addTeamToPodAction(
+  capsuleKey: string,
+  podId: string,
+  teamId: number,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await addTeamToPod(prisma, capsuleKey, podId, teamId);
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function removeTeamFromPodAction(
+  capsuleKey: string,
+  podId: string,
+  teamId: number,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await removeTeamFromPod(prisma, capsuleKey, podId, teamId);
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function deleteManualPodAction(capsuleKey: string, podId: string): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await deleteManualPod(prisma, capsuleKey, podId);
+  if (report.status === "success") await refreshAdmin();
+  return report;
+}
+
+export async function setPodRemainderFlagAction(
+  capsuleKey: string,
+  podId: string,
+  flagged: boolean,
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  const report = await setPodRemainderFlag(prisma, capsuleKey, podId, flagged);
+  if (report.status === "success") await refreshAdmin();
   return report;
 }
 
