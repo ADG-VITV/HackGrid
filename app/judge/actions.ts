@@ -4,15 +4,17 @@ import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EVENT_KEY } from "@/lib/auction-engine.mjs";
+import { verifyIdToken, type VerifiedIdentity } from "@/lib/firebase-admin";
 
 // ---------------------------------------------------------------------------
 // Judge portal server actions.
 //
-// Identity model: a judge signs in with Firebase. The client sends the
-// Firebase uid; the server resolves it to a JudgeProfile, then to the ACTIVE
-// JudgeEventAssignment for the current event. The judge's action is derived
-// and validated server-side — the client never sends an arbitrary assignment
-// or judge id it expects to be trusted.
+// Identity model: a judge signs in with Firebase. The client sends its Firebase
+// ID token; the server verifies the token (signature, audience, expiry) and
+// only then resolves the uid to a JudgeProfile and the ACTIVE
+// JudgeEventAssignment for the current event. Name and email come from the
+// verified claims. The client never sends a uid, name, email, assignment or
+// judge id it expects to be trusted.
 //
 // The rubric is event data: active JudgingCriterion rows ordered by
 // displayOrder, with minScore/maxScore as the only authoritative boundaries.
@@ -136,6 +138,11 @@ function sha256(value: string) {
   return createHash("sha256").update(value).digest("hex");
 }
 
+/** Resolves a client-supplied ID token to verified claims, or null. */
+async function identityFromToken(idToken: string | null | undefined): Promise<VerifiedIdentity | null> {
+  return verifyIdToken(typeof idToken === "string" ? idToken.trim() : null);
+}
+
 async function eventByKey() {
   return prisma.event.findUnique({ where: { key: EVENT_KEY } });
 }
@@ -226,7 +233,7 @@ async function resourcesView(event: { id: string; startingBudget: number }, team
 // ---------------------------------------------------------------------------
 
 export async function getJudgeSessionAction(
-  firebaseUid: string | null,
+  idToken: string | null,
 ): Promise<JudgeSessionResult> {
   try {
     const event = await eventByKey();
@@ -238,9 +245,11 @@ export async function getJudgeSessionAction(
       };
     }
 
-    if (!firebaseUid) {
+    const identity = await identityFromToken(idToken);
+    if (!identity) {
       return { status: "signed_out" };
     }
+    const firebaseUid = identity.uid;
 
     const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid } });
 
@@ -317,12 +326,10 @@ export async function redeemJudgeInvitationAction(
   _previousState: JudgeEntranceReport,
   formData: FormData,
 ): Promise<JudgeEntranceReport> {
-  const firebaseUid = field(formData, "firebaseUid");
-  const name = field(formData, "name");
-  const email = field(formData, "email");
+  const identity = await identityFromToken(field(formData, "idToken"));
   const code = field(formData, "code");
 
-  if (!firebaseUid) {
+  if (!identity) {
     return { status: "invalid", message: "Sign in with Google first." };
   }
 
@@ -330,9 +337,11 @@ export async function redeemJudgeInvitationAction(
     return { status: "invalid", message: "Enter your invitation code." };
   }
 
-  if (name.length > 80 || email.length > 254) {
-    return { status: "invalid", message: "Check your name and email." };
-  }
+  // Name and email are audit snapshots taken from the verified token, never
+  // from the form. Column widths: name VarChar(80), email VarChar(254).
+  const firebaseUid = identity.uid;
+  const name = (identity.name ?? "").trim().slice(0, 80);
+  const email = (identity.email ?? "").trim().slice(0, 254);
 
   try {
     const event = await eventByKey();
@@ -420,7 +429,7 @@ export async function redeemJudgeInvitationAction(
 // ---------------------------------------------------------------------------
 
 export async function searchJudgeTeamsAction(
-  firebaseUid: string | null,
+  idToken: string | null,
   queryValue: string,
 ): Promise<JudgeSearchResult> {
   try {
@@ -429,12 +438,13 @@ export async function searchJudgeTeamsAction(
       return { status: "error", message: "The event has not been prepared yet.", teams: [] };
     }
 
-    if (!firebaseUid) {
+    const identity = await identityFromToken(idToken);
+    if (!identity) {
       return { status: "error", message: "Sign in to browse teams.", teams: [] };
     }
 
     const judge = await prisma.judgeProfile.findUnique({
-      where: { firebaseUid },
+      where: { firebaseUid: identity.uid },
     });
     if (!judge) {
       return { status: "error", message: "Your judge profile is not registered.", teams: [] };
@@ -524,7 +534,7 @@ export async function searchJudgeTeamsAction(
 // ---------------------------------------------------------------------------
 
 export async function getJudgeReviewAction(
-  firebaseUid: string | null,
+  idToken: string | null,
   teamIdValue: number,
 ): Promise<
   | { status: "success"; context: JudgeReviewContext }
@@ -536,11 +546,12 @@ export async function getJudgeReviewAction(
       return { status: "error", message: "The event has not been prepared yet.", context: null };
     }
 
-    if (!firebaseUid) {
+    const identity = await identityFromToken(idToken);
+    if (!identity) {
       return { status: "error", message: "Sign in to review a team.", context: null };
     }
 
-    const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid } });
+    const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid: identity.uid } });
     if (!judge) {
       return { status: "error", message: "Your judge profile is not registered.", context: null };
     }
@@ -601,13 +612,13 @@ export async function getJudgeReviewAction(
 export async function submitJudgeEvaluationAction(
   formData: FormData,
 ): Promise<JudgeSubmitReport> {
-  const firebaseUid = field(formData, "firebaseUid");
+  const idToken = field(formData, "idToken");
   const teamId = parseIntSafe(field(formData, "teamId"), Number.NaN);
   const review = formData.get("review");
   const reviewText = typeof review === "string" ? review : "";
   const scoresRaw = field(formData, "scores");
 
-  if (!firebaseUid || Number.isNaN(teamId)) {
+  if (!idToken || Number.isNaN(teamId)) {
     return {
       status: "invalid",
       message: "Sign in and pick a team before submitting.",
@@ -621,7 +632,12 @@ export async function submitJudgeEvaluationAction(
       return { status: "error", message: "The event has not been prepared yet.", evaluation: null };
     }
 
-    const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid } });
+    const identity = await identityFromToken(idToken);
+    if (!identity) {
+      return { status: "invalid", message: "Your sign-in has expired. Sign in again and resubmit.", evaluation: null };
+    }
+
+    const judge = await prisma.judgeProfile.findUnique({ where: { firebaseUid: identity.uid } });
     if (!judge) {
       return { status: "error", message: "Your judge profile is not registered.", evaluation: null };
     }
