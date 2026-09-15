@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { ChevronIcon } from "./auction-icon";
 import { ExpandedWorkspace } from "./expanded-workspace";
@@ -15,6 +16,7 @@ import { secondsUntil, useAuctionSocket, useSecondTick } from "./use-auction-soc
 const MEMBER_LIVE_POLL_MS = 4_000;
 /** Polling between rounds, for everyone who has no room to sit in. */
 const IDLE_POLL_MS = 10_000;
+const NO_TEAM_MESSAGE = "Join or create a team first to view the bidding page.";
 
 function formatTimerDisplay(seconds: number) {
   const m = Math.floor(seconds / 60);
@@ -77,6 +79,13 @@ export function BiddingClient() {
   // A context fetched for one identity must not linger once it changes — a
   // sign-out drops straight back to the empty shell.
   const context = identity && fetched.identity === identity ? fetched.context : emptyContext;
+  const lookupPending = Boolean(identity && fetched.identity !== identity);
+  const needsTeam = Boolean(
+    identity &&
+      fetched.identity === identity &&
+      !context.team &&
+      context.message === "No team found for that identity.",
+  );
 
   const teamId = context.team ? String(context.team.id) : null;
   // Only the lead bids (rulebook 8). A member gets the read-only view and
@@ -134,6 +143,12 @@ export function BiddingClient() {
   const secondsLeft = secondsUntil(activeLot?.closesAt ?? null, clockSkew);
 
   function workspaceMessage(): string | null {
+    if (viewer.loading || lookupPending) {
+      return "Loading your team...";
+    }
+    if (needsTeam) {
+      return NO_TEAM_MESSAGE;
+    }
     if (!teamId) {
       return "Sign in with your team's email to join its pod room.";
     }
@@ -148,15 +163,46 @@ export function BiddingClient() {
     return null;
   }
 
+  const identityLabel = context.team
+    ? `${context.team.name} · ${context.team.code}`
+    : viewer.loading || lookupPending
+      ? "Loading your team..."
+      : needsTeam
+        ? "Join or create a team first"
+        : identity
+          ? (context.message || "Team lookup failed")
+          : "Not signed in";
+
+  const emptyResourceHint = needsTeam
+    ? NO_TEAM_MESSAGE
+    : teamId
+      ? null
+      : "Sign in with your roster email to see what your team owns.";
+
   return (
     <main className="flex min-h-dvh flex-col overflow-x-hidden bg-black p-4 pt-20 text-zinc-100 sm:p-[3%] sm:pt-24">
       <div className="mx-auto flex w-full max-w-7xl flex-1 flex-col gap-4">
         <IdentityBar
-          teamLabel={context.team ? `${context.team.name} · ${context.team.code}` : null}
+          teamLabel={identityLabel}
           podLabel={room?.pod.label ?? liveCapsule?.podLabel ?? null}
           connection={connection}
           balance={context.resources?.remaining ?? null}
         />
+
+        {needsTeam ? (
+          <section className="rounded-2xl border border-neon/25 bg-neon/[0.04] px-4 py-4 shadow-[0_0_40px_rgba(66,255,90,0.08)] sm:flex sm:items-center sm:justify-between sm:gap-4">
+            <div>
+              <p className="text-sm font-semibold text-zinc-100">Team required</p>
+              <p className="mt-1 text-xs leading-5 text-zinc-500">{NO_TEAM_MESSAGE}</p>
+            </div>
+            <Link
+              href="/teams"
+              className="mt-3 inline-flex h-9 items-center justify-center rounded-lg border border-neon/40 px-4 font-mono text-[0.62rem] tracking-[0.14em] text-neon uppercase transition hover:bg-neon/10 sm:mt-0"
+            >
+              Open Teams
+            </Link>
+          </section>
+        ) : null}
 
         <section className="flex min-h-0 flex-1 flex-col gap-[2.5%] lg:flex-row">
           <div className="flex min-h-0 flex-1 flex-col gap-[2%] self-start rounded-[2.5rem] border border-neon/20 bg-black p-[1.5%] shadow-[0_0_80px_rgba(66,255,90,0.06)] lg:w-[74%]">
@@ -285,9 +331,7 @@ export function BiddingClient() {
             <ResourceManager
               resources={context.resources}
               capsules={context.capsules}
-              identityHint={
-                teamId ? null : "Sign in with your roster email to see what your team owns."
-              }
+              identityHint={emptyResourceHint}
             />
           </aside>
         </section>
