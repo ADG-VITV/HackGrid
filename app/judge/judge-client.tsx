@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, type User } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";
 import { auth } from "@/lib/firebase";
 import {
@@ -27,6 +27,20 @@ import { EvaluationForm } from "./evaluation-form";
 import { SubmitBar } from "./submit-bar";
 
 type EntranceStage = "bootstrapping" | "entrance" | "active";
+
+/**
+ * Every server action authenticates with a Firebase ID token, never a raw uid.
+ * The SDK refreshes the token itself; a null here means we are signed out or
+ * the refresh failed, and the server will treat the call as unauthenticated.
+ */
+async function idTokenFor(user: User | null) {
+  if (!user) return null;
+  try {
+    return await user.getIdToken();
+  } catch {
+    return null;
+  }
+}
 
 export function JudgeClient() {
   const { user, loading: authLoading, signOut } = useAuth();
@@ -72,10 +86,10 @@ export function JudgeClient() {
     authLoading || Boolean(user && (session === null || session.firebaseUid !== user.uid));
 
   useEffect(() => {
-    if (authLoading) return;
-    const currentUid = user?.uid ?? null;
-    if (!currentUid) return;
-    getJudgeSessionAction(currentUid)
+    if (authLoading || !user) return;
+    const currentUid = user.uid;
+    idTokenFor(user)
+      .then((token) => getJudgeSessionAction(token))
       .then((result) => setSession({ result, firebaseUid: currentUid }))
       .catch(() =>
         setSession({
@@ -86,7 +100,7 @@ export function JudgeClient() {
           firebaseUid: currentUid,
         }),
       );
-  }, [authLoading, user?.uid]);
+  }, [authLoading, user]);
 
   const activeSession: JudgeSessionView | null =
     session?.result.status === "active" && session.firebaseUid === user?.uid
@@ -147,10 +161,9 @@ export function JudgeClient() {
     if (!user || !code.trim()) return;
     startRedeem(async () => {
       setRedeemMessage(null);
+      const token = await idTokenFor(user);
       const fd = new FormData();
-      fd.set("firebaseUid", user.uid);
-      fd.set("name", user.displayName ?? "");
-      fd.set("email", user.email ?? "");
+      fd.set("idToken", token ?? "");
       fd.set("code", code.trim().toUpperCase());
       const report: JudgeEntranceReport = await redeemJudgeInvitationAction(
         { status: "error", message: "" },
@@ -161,7 +174,7 @@ export function JudgeClient() {
       }));
       setRedeemMessage(report.message);
       if (report.status === "success") {
-        getJudgeSessionAction(user.uid)
+        getJudgeSessionAction(token)
           .then((result) => setSession({ result, firebaseUid: user.uid }))
           .catch(() => undefined);
       }
@@ -172,36 +185,34 @@ export function JudgeClient() {
 
   useEffect(() => {
     if (stage !== "active") return;
-    const currentUid = user?.uid ?? null;
     const timer = setTimeout(() => {
       startSearch(async () => {
-        const result = await searchJudgeTeamsAction(currentUid, query).catch(
-          () => ({
+        const result = await idTokenFor(user)
+          .then((token) => searchJudgeTeamsAction(token, query))
+          .catch(() => ({
             status: "error" as const,
             message: "Could not load teams.",
             teams: [],
-          }),
-        );
+          }));
         setSearchResult(result);
       });
     }, 220);
     return () => clearTimeout(timer);
-  }, [query, stage, user?.uid]);
+  }, [query, stage, user]);
 
   // ------------------------------------------------------------------ review
 
   const loadReview = useCallback(
     (teamId: number) => {
-      const currentUid = user?.uid ?? null;
       startReview(async () => {
         setReviewError(null);
-        const result = await getJudgeReviewAction(currentUid, teamId).catch(
-          () => ({
+        const result = await idTokenFor(user)
+          .then((token) => getJudgeReviewAction(token, teamId))
+          .catch(() => ({
             status: "error" as const,
             message: "Could not load team data.",
             context: null,
-          }),
-        );
+          }));
         if (result.status === "error") {
           setReviewError(result.message);
           setContext(null);
@@ -226,7 +237,7 @@ export function JudgeClient() {
         }
       });
     },
-    [user?.uid],
+    [user],
   );
 
   useEffect(() => {
@@ -253,12 +264,13 @@ export function JudgeClient() {
     if (!context || !activeSession || !user) return;
 
     const fd = new FormData();
-    fd.set("firebaseUid", user.uid);
     fd.set("teamId", String(context.team.id));
     fd.set("review", review);
     fd.set("scores", JSON.stringify(scores ?? {}));
 
     startSubmit(async () => {
+      const token = await idTokenFor(user);
+      fd.set("idToken", token ?? "");
       const result = await submitJudgeEvaluationAction(fd).catch(
         () =>
           ({
@@ -274,7 +286,7 @@ export function JudgeClient() {
         setSavedEvaluation(result.evaluation);
         loadReview(context.team.id);
         startSearch(async () => {
-          const search = await searchJudgeTeamsAction(user.uid, query).catch(
+          const search = await searchJudgeTeamsAction(token, query).catch(
             () => searchResult,
           );
           setSearchResult(search);
