@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
-import { Navbar } from "@/components/ui/Navbar";
 import { EVENT_KEY } from "@/lib/auction-engine.mjs";
 import { prisma } from "@/lib/prisma";
 
@@ -31,8 +30,7 @@ export default async function EvaluationsPage() {
       name: true,
       judgingCriteria: {
         where: { active: true },
-        orderBy: { displayOrder: "asc" },
-        select: { id: true, name: true, maxScore: true },
+        select: { maxScore: true },
       },
       evaluations: {
         where: { status: "SUBMITTED" },
@@ -57,9 +55,8 @@ export default async function EvaluationsPage() {
 
   for (const evaluation of event?.evaluations ?? []) {
     const existing = teams.get(evaluation.team.id);
-    if (existing) {
-      existing.evaluations.push(evaluation);
-    } else {
+    if (existing) existing.evaluations.push(evaluation);
+    else {
       teams.set(evaluation.team.id, {
         name: evaluation.team.name,
         code: evaluation.team.code,
@@ -72,10 +69,8 @@ export default async function EvaluationsPage() {
   const teamResults = [...teams.values()].sort((left, right) => left.name.localeCompare(right.name));
 
   return (
-    <>
-      <Navbar />
-      <main className="min-h-dvh bg-black px-4 pt-28 pb-16 text-zinc-100 sm:px-6">
-        <div className="mx-auto max-w-6xl">
+    <main className="min-h-dvh bg-black px-4 py-16 text-zinc-100 sm:px-6">
+      <div className="mx-auto max-w-6xl">
           <header className="mb-8">
             <p className="font-mono text-xs font-semibold uppercase tracking-[0.2em] text-[#42ff5a]">
               {event?.name ?? "HackGrid"}
@@ -149,8 +144,7 @@ export default async function EvaluationsPage() {
               })}
             </div>
           )}
-        </div>
-      </main>
-    </>
+      </div>
+    </main>
   );
 }

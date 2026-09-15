@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
 import { useAuth } from "@/context/AuthContext";
 import { auth } from "@/lib/firebase";
@@ -103,6 +104,8 @@ export function JudgeClient() {
   let entranceView: EntranceView;
   if (!user) {
     entranceView = { view: "signed_out" };
+  } else if (activeSession) {
+    entranceView = { view: "active" };
   } else if (session?.result.status === "pending" && session.firebaseUid === user.uid) {
     entranceView = { view: "pending", message: session.result.message };
   } else if (session?.result.status === "denied" && session.firebaseUid === user.uid) {
@@ -293,21 +296,33 @@ export function JudgeClient() {
       <div className="mx-auto max-w-5xl px-4 pt-28 pb-40 sm:px-6">
         {/* Page header */}
         <header className="mb-6">
-          <p className="font-mono text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#42ff5a]">
-            Judge Portal
-          </p>
-          <h1
-            className="font-pixel mt-2 text-2xl font-bold tracking-wider text-white sm:text-3xl"
-            style={{
-              textShadow: "0 0 12px rgba(66,255,90,0.35)",
-            }}
-          >
-            Judge Review
-          </h1>
-          <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
-            Search for a team, review what they acquired in the auction, score
-            them against the event rubric, and submit.
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="font-mono text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-[#42ff5a]">
+                Judge Portal
+              </p>
+              <h1
+                className="font-pixel mt-2 text-2xl font-bold tracking-wider text-white sm:text-3xl"
+                style={{
+                  textShadow: "0 0 12px rgba(66,255,90,0.35)",
+                }}
+              >
+                Judge Review
+              </h1>
+              <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-500">
+                Search for a team, review what they acquired in the auction, score
+                them against the event rubric, and submit.
+              </p>
+            </div>
+            {stage === "active" ? (
+              <Link
+                href="/judge/evaluations"
+                className="rounded-lg border border-[#42ff5a]/50 bg-[#42ff5a]/10 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-[#42ff5a] transition hover:bg-[#42ff5a]/20"
+              >
+                View evaluations
+              </Link>
+            ) : null}
+          </div>
         </header>
 
         {stage === "bootstrapping" ? (
