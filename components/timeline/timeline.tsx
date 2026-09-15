@@ -380,8 +380,9 @@ export default function HackGridTimeline() {
 
   return (
     <div
+      id="timeline"
       ref={containerRef}
-      className={`relative bg-transparent text-white font-mono min-h-[2400vh] overflow-x-clip ${jetbrainsMono.variable} ${spaceGrotesk.variable} ${geistMono.variable}`}
+      className={`relative scroll-mt-24 bg-transparent text-white font-mono min-h-[2400vh] overflow-x-clip ${jetbrainsMono.variable} ${spaceGrotesk.variable} ${geistMono.variable}`}
     >
       <style jsx global>{`
         @keyframes spinClockwise {

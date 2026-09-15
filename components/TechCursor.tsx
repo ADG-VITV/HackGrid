@@ -24,7 +24,7 @@ export default function TechCursor() {
     <>
       {/* 1. Spring Tracking Container */}
       <motion.div
-        className="fixed top-0 left-0 w-10 h-10 pointer-events-none z-50 mix-blend-screen"
+        className="fixed top-0 left-0 w-10 h-10 pointer-events-none z-50"
         style={{ x: cursorX, y: cursorY }}
       >
         {/* Native SVG bypasses Tailwind border rendering bugs entirely */}
@@ -42,7 +42,7 @@ export default function TechCursor() {
       
       {/* 2. Instant Inner Targeting Diamond */}
       <motion.div
-        className="fixed top-0 left-0 w-10 h-10 pointer-events-none z-50 mix-blend-screen flex items-center justify-center"
+        className="fixed top-0 left-0 w-10 h-10 pointer-events-none z-50 flex items-center justify-center"
         style={{ x: mouseX, y: mouseY }}
       >
          <div className="w-1.5 h-1.5 bg-[#00FF41] rotate-45 shadow-[0_0_8px_rgba(0,255,65,0.8)]" />
