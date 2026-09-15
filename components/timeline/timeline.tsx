@@ -83,7 +83,9 @@ export default function HackGridTimeline() {
     if ("scrollRestoration" in history) {
       history.scrollRestoration = "manual";
     }
-    window.scrollTo(0, 0);
+    if (!window.location.hash || window.location.hash === "#home") {
+      window.scrollTo(0, 0);
+    }
 
     gsap.registerPlugin(ScrollTrigger);
 
@@ -380,6 +382,7 @@ export default function HackGridTimeline() {
 
   return (
     <div
+      id="timeline"
       ref={containerRef}
       className={`relative bg-transparent text-white font-mono min-h-[2400vh] overflow-x-clip ${jetbrainsMono.variable} ${spaceGrotesk.variable} ${geistMono.variable}`}
     >
