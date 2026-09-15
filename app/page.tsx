@@ -15,11 +15,13 @@ export default function Home() {
         <BulgeGrid />
       </div>
 
-      <section className="relative h-screen w-full overflow-hidden bg-transparent cursor-none">
+      <section id="home" className="relative h-screen w-full overflow-hidden bg-transparent cursor-none">
         <Hero />
       </section>
 
-      <HackDetails />
+      <div id="about">
+        <HackDetails />
+      </div>
       <HackGridTimeline />
       <ADG_details />
       <Footer />

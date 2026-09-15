@@ -21,8 +21,8 @@ export interface NavbarProps {
 
 const navItems = [
   { name: "Home", href: "/#home" },
-  { name: "About", href: "/#about" },
-  { name: "Timeline", href: "/#timeline" },
+  { name: "About", href: "/about" },
+  { name: "Timeline", href: "/timeline" },
   { name: "Rules", href: "/rules" },
   { name: "Bidding", href: "/bidding" },
   { name: "Teams", href: "/teams" },
