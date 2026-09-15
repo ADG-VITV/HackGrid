@@ -15,9 +15,19 @@ import {
   setPodRemainderFlag,
   startCapsule,
   startEvent,
+  EVENT_KEY,
 } from "@/lib/auction-engine.mjs";
 
 export type AdminReport = { status: "success" | "error"; message: string };
+
+export type JudgeApplicationAdminView = {
+  id: string;
+  name: string;
+  email: string;
+  status: "PENDING" | "APPROVED" | "REJECTED";
+  submittedAt: string;
+  reviewedAt: string | null;
+};
 
 export type AdminContext = {
   teamCount: number;
@@ -115,6 +125,82 @@ export async function getAdminContextAction(): Promise<AdminContext> {
   }
 
   return context;
+}
+
+export async function getJudgeApplicationsAdminAction(): Promise<JudgeApplicationAdminView[]> {
+  const event = await prisma.event.findUnique({ where: { key: EVENT_KEY }, select: { id: true } });
+  if (!event) return [];
+
+  const applications = await prisma.judgeApplication.findMany({
+    where: { eventId: event.id },
+    orderBy: [{ status: "asc" }, { submittedAt: "asc" }],
+  });
+
+  return applications.map((application) => ({
+    id: application.id,
+    name: application.name,
+    email: application.email,
+    status: application.status,
+    submittedAt: application.submittedAt.toISOString(),
+    reviewedAt: application.reviewedAt?.toISOString() ?? null,
+  }));
+}
+
+export async function reviewJudgeApplicationAction(
+  applicationId: string,
+  decision: "APPROVED" | "REJECTED",
+): Promise<AdminReport> {
+  if (!organiserEnabled()) return unavailable();
+  if (!applicationId || (decision !== "APPROVED" && decision !== "REJECTED")) {
+    return { status: "error", message: "Invalid judge application decision." };
+  }
+
+  try {
+    const application = await prisma.judgeApplication.findUnique({ where: { id: applicationId } });
+    if (!application) return { status: "error", message: "Judge application was not found." };
+    if (application.status !== "PENDING") {
+      return { status: "error", message: "This judge application has already been reviewed." };
+    }
+
+    await prisma.$transaction(async (tx) => {
+      if (decision === "REJECTED") {
+        await tx.judgeApplication.update({
+          where: { id: application.id },
+          data: { status: "REJECTED", reviewedAt: new Date() },
+        });
+        return;
+      }
+
+      const judge = await tx.judgeProfile.upsert({
+        where: { firebaseUid: application.firebaseUid },
+        update: { name: application.name, email: application.email },
+        create: {
+          firebaseUid: application.firebaseUid,
+          name: application.name,
+          email: application.email,
+        },
+      });
+
+      await tx.judgeEventAssignment.upsert({
+        where: { judgeId_eventId: { judgeId: judge.id, eventId: application.eventId } },
+        update: { status: "ACTIVE", approvedAt: new Date() },
+        create: { judgeId: judge.id, eventId: application.eventId, status: "ACTIVE" },
+      });
+
+      await tx.judgeApplication.update({
+        where: { id: application.id },
+        data: { status: "APPROVED", reviewedAt: new Date(), judgeId: judge.id },
+      });
+    });
+
+    await refreshAdmin();
+    return {
+      status: "success",
+      message: decision === "APPROVED" ? "Judge application approved." : "Judge application rejected.",
+    };
+  } catch {
+    return { status: "error", message: "Could not review the judge application." };
+  }
 }
 
 export async function startEventAdminAction(): Promise<AdminReport> {

@@ -73,3 +73,95 @@ body {
     transform: rotateX(-90deg);
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Judge range slider                                                  */
+/* ------------------------------------------------------------------ */
+
+.hg-range {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  margin: 0;
+}
+
+.hg-range::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    rgba(66, 255, 90, 0.6) 0%,
+    rgba(66, 255, 90, 0.6) var(--fill, 0%),
+    rgba(255, 255, 255, 0.08) var(--fill, 0%),
+    rgba(255, 255, 255, 0.08) 100%
+  );
+}
+
+.hg-range::-moz-range-track {
+  height: 6px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    rgba(66, 255, 90, 0.6) 0%,
+    rgba(66, 255, 90, 0.6) var(--fill, 0%),
+    rgba(255, 255, 255, 0.08) var(--fill, 0%),
+    rgba(255, 255, 255, 0.08) 100%
+  );
+}
+
+.hg-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #42ff5a;
+  box-shadow: 0 0 10px rgba(66, 255, 90, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  margin-top: -9px;
+  cursor: grab;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.hg-range::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: #42ff5a;
+  box-shadow: 0 0 10px rgba(66, 255, 90, 0.7);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  cursor: grab;
+  transition: box-shadow 0.15s, transform 0.1s;
+}
+
+.hg-range:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  box-shadow: 0 0 18px rgba(66, 255, 90, 0.9);
+  transform: scale(1.1);
+}
+
+.hg-range:active::-moz-range-thumb {
+  cursor: grabbing;
+  box-shadow: 0 0 18px rgba(66, 255, 90, 0.9);
+  transform: scale(1.1);
+}
+
+/* ------------------------------------------------------------------ */
+/* Judge enter animation                                               */
+/* ------------------------------------------------------------------ */
+
+@keyframes hg-judge-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.hg-judge-team-row {
+  animation: hg-judge-enter 0.35s ease-out both;
+}
