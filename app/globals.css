@@ -16,6 +16,8 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* The one accent colour. The hero and login page already read this. */
+  --neon: #42ff5a;
   --font-geist-pixel: 'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
   --font-geist-pixel-square: 'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
 }
@@ -36,10 +38,18 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --color-neon: #42ff5a;
+  --color-neon: var(--neon);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
   --font-pixel: 'GeistPixelSquare', 'Pixelify Sans', 'Silkscreen', 'Press Start 2P', monospace;
+}
+
+/* The flip clock's glow, so any neon headline can carry the same light. */
+@utility text-glow-neon {
+  text-shadow:
+    0 0 6px rgba(66, 255, 90, 0.85),
+    0 0 16px rgba(66, 255, 90, 0.55),
+    0 0 32px rgba(66, 255, 90, 0.25);
 }
 
 @media (prefers-color-scheme: dark) {

@@ -28,7 +28,23 @@ try {
 
 const port = parseInt(process.env.PORT || "3000", 10);
 const hostname = process.env.HOSTNAME || "localhost";
-const dev = process.env.NODE_ENV !== "production";
+
+// Which mode to run in. An explicit NODE_ENV wins; otherwise `npm run dev` is
+// development and everything else (`npm start`, a bare `node server.mjs`, a
+// host's start command) is production. npm sets npm_lifecycle_event to the
+// script name, so this works the same in PowerShell, cmd and sh.
+const dev = process.env.NODE_ENV
+  ? process.env.NODE_ENV !== "production"
+  : process.env.npm_lifecycle_event === "dev";
+// Next, Prisma and the app's own NODE_ENV checks all read this, so make sure
+// they see the mode this server actually decided on.
+process.env.NODE_ENV = dev ? "development" : "production";
+
+// Production may point at its own database. Only honoured in production, so a
+// dev run can never touch the live tables by accident.
+if (!dev && process.env.DATABASE_URL_PRODUCTION) {
+  process.env.DATABASE_URL = process.env.DATABASE_URL_PRODUCTION;
+}
 
 if (!process.env.DATABASE_URL) {
   console.error("[server] DATABASE_URL is not set. Add it to .env before starting.");
@@ -95,25 +111,32 @@ app.use((error, _req, res, _nextFn) => {
  * to belong to the pod it claims.
  */
 io.use((socket, nextFn) => {
-  const { podId, teamId } = socket.handshake.auth ?? {};
+  const { podId, teamId, email } = socket.handshake.auth ?? {};
   const parsedTeamId = Number.parseInt(teamId, 10);
 
   if (typeof podId !== "string" || !podId || !Number.isInteger(parsedTeamId)) {
     return nextFn(new Error("Missing or invalid podId / teamId."));
   }
+  // Only the team lead bids (rulebook 8), so the room needs to know who is
+  // asking, not just which team they are on.
+  if (typeof email !== "string" || !email.includes("@")) {
+    return nextFn(new Error("Missing the signed-in email."));
+  }
 
   socket.data.requestedPodId = podId;
   socket.data.requestedTeamId = parsedTeamId;
+  socket.data.requestedEmail = email.trim().toLowerCase();
   nextFn();
 });
 
 io.on("connection", async (socket) => {
   const podId = socket.data.requestedPodId;
   const teamId = socket.data.requestedTeamId;
+  const email = socket.data.requestedEmail;
 
   let seated = false;
   try {
-    seated = await hub.attach(socket, { podId, teamId });
+    seated = await hub.attach(socket, { podId, teamId, email });
   } catch (error) {
     console.error("[socket] attach failed:", error);
     socket.emit("ROOM_ERROR", { message: "Could not join the room." });

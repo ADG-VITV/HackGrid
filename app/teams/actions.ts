@@ -146,57 +146,6 @@ export async function getAuctionTeamForEmailAction(emailValue: string): Promise<
   }
 }
 
-/** Look up any team by a member's name and email. Used by the teams page. */
-export async function lookupTeamMemberAction(
-  _previousState: AuctionTeamState,
-  formData: FormData,
-): Promise<AuctionTeamState> {
-  try {
-    if (!process.env.DATABASE_URL) {
-      return databaseMissingState();
-    }
-
-    const name = field(formData, "lookupName");
-    const email = normalizeEmail(field(formData, "lookupEmail"));
-
-    if (!name) {
-      return validationError("Enter the person's name.");
-    }
-
-    if (!isEmail(email)) {
-      return validationError("Enter a valid email address.");
-    }
-
-    const user = await prisma.user.findUnique({ where: { email } });
-
-    if (!user) {
-      return validationError("No person found with that email.");
-    }
-
-    if (user.name.trim().toLowerCase() !== name.toLowerCase()) {
-      return validationError("That name does not match the email on record.");
-    }
-
-    const team = await findTeamForEmail(email);
-
-    if (!team) {
-      return validationError("That person is not in a team yet.");
-    }
-
-    const view = toTeamView(team);
-    const viewer = view.members.find((member) => member.email === email);
-
-    return {
-      status: "success",
-      message: `Showing ${view.name} as ${viewer?.role === "LEADER" ? "the team lead" : "a member"}.`,
-      viewerRole: viewer?.role ?? "MEMBER",
-      team: view,
-    };
-  } catch (error) {
-    return databaseError(error);
-  }
-}
-
 async function createTeam(formData: FormData): Promise<AuctionTeamState> {
   if (!process.env.DATABASE_URL) {
     return databaseMissingState();
@@ -372,5 +321,52 @@ export async function submitAuctionTeamAction(
     return validationError("Choose whether you want to create or join a team.");
   } catch (error) {
     return databaseError(error);
+  }
+}
+
+export type RosterUser = {
+  id: number;
+  name: string;
+  email: string;
+  /** Null when the person is on no team. */
+  role: "LEADER" | "MEMBER" | null;
+  teamName: string | null;
+};
+
+/**
+ * Everyone in the users table, for the development-only "act as" picker on
+ * the teams page. Empty in production: nothing there lists other people.
+ */
+export async function listUsersAction(): Promise<RosterUser[]> {
+  if (process.env.NODE_ENV !== "development" || !process.env.DATABASE_URL) {
+    return [];
+  }
+
+  try {
+    const users = await prisma.user.findMany({
+      orderBy: { name: "asc" },
+      relationLoadStrategy: "join",
+      include: {
+        memberships: {
+          orderBy: { joinedAt: "desc" },
+          take: 1,
+          select: { team: { select: { name: true, leaderId: true } } },
+        },
+      },
+    });
+
+    return users.map((user) => {
+      const team = user.memberships[0]?.team ?? null;
+      return {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: team ? (team.leaderId === user.id ? "LEADER" : "MEMBER") : null,
+        teamName: team?.name ?? null,
+      };
+    });
+  } catch (error) {
+    console.error("listUsersAction failed:", error);
+    return [];
   }
 }

@@ -78,7 +78,11 @@ export function findTeamByIdOrEmail(prisma: AnyPrisma, value: string): Promise<u
 export type BiddingContextResult = {
   status: "success" | "error";
   message: string;
-  team: { id: number; name: string; code: string; leadEmail: string } | null;
+  team: { id: number; name: string; code: string; leadName: string; leadEmail: string } | null;
+  /** Null when no identity was given or no team matched. */
+  viewerRole: "LEADER" | "MEMBER" | null;
+  /** The tier open in this team's pod right now, if any. */
+  currentLot: { name: string; tierRank: number; closesAt: string | null } | null;
   capsules: (CapsuleRow & {
     podId: string | null;
     podLabel: string | null;
