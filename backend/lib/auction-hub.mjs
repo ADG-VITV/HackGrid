@@ -1,9 +1,8 @@
 /**
  * The auction hub: one Socket.IO room per pod.
  *
- * Runs inside the Express server (server.mjs), which means it shares a process
- * with the Next app — so server actions can reach it through globalThis to
- * announce that pods were just created.
+ * Runs inside the Express server (server.mjs). The admin router in the same
+ * process calls into it directly to announce that pods were just created.
  *
  * Every rule decision in here happens on the server. The browser sends an
  * intent ("bid 380 on this lot") and nothing more; this file decides whether
@@ -55,11 +54,9 @@ export function createAuctionHub({ connectionString, io }) {
     idleTimeoutMillis: 0,
     keepAlive: true,
   });
+  // One client for the whole process: the REST routers borrow it from the hub
+  // so there is a single connection pool rather than several competing ones.
   const prisma = new PrismaClient({ adapter });
-
-  // The Next app runs in this process too. Sharing one client means one
-  // connection pool instead of two competing for the same database.
-  globalThis.__hackgridPrisma = prisma;
 
   /** Pods with at least one client, so empty rooms are never pushed to. */
   const occupiedPods = new Set();
@@ -960,7 +957,7 @@ export function createAuctionHub({ connectionString, io }) {
     if (typeof ticking.unref === "function") ticking.unref();
   }
 
-  /** Called by the Start server action once pods and lots exist in the DB. */
+  /** Called by the admin router's Start routes once pods and lots exist in the DB. */
   async function onCapsuleStarted(capsuleId) {
     // One query for every open lot in the capsule. Walking pod by pod costs a
     // round trip each, which for 15 pods is most of a minute against Neon.

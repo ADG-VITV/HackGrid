@@ -1,24 +1,33 @@
 /**
- * HackGrid server: Express in front, Next behind, Socket.IO on the same port.
+ * HackGrid backend: Express and Socket.IO on one port.
  *
  * Layout:
- *   express app   -> /api/auction/*  the auction REST API (lib/auction-router.mjs)
- *                 -> everything else falls through to Next
- *   http.Server   -> shared by Express, Socket.IO and Next's HMR socket
+ *   express app   -> /api/auction/*  the auction REST API   (lib/auction-router.mjs)
+ *                 -> /api/teams/*    create / join / lookup (lib/teams-router.mjs)
+ *                 -> /api/admin/*    organiser controls     (lib/admin-router.mjs)
+ *                 -> /health         liveness probe for the host
+ *   http.Server   -> shared by Express and Socket.IO
  *   socket.io     -> /socket.io      the live bidding rooms (lib/auction-hub.mjs)
  *
- * Plain .mjs on purpose: this file does not go through the Next compiler, so it
- * has to be valid Node as written.
+ * The Next.js frontend is a separate application on a separate origin. It
+ * talks to this server over HTTPS (the REST routes) and WebSocket (Socket.IO),
+ * so CORS is configured from CORS_ORIGIN.
+ *
+ * There is no build step: this is plain Node, started with `node server.mjs`.
+ * The Socket.IO server is created in this file and attached to the same
+ * http.Server Express listens on — it is not a second process.
  */
 
 import { createServer } from "node:http";
 import { loadEnvFile } from "node:process";
-import { parse } from "node:url";
+import cors from "cors";
 import express from "express";
-import next from "next";
 import { Server as SocketIOServer } from "socket.io";
+import { createAdminRouter } from "./lib/admin-router.mjs";
 import { createAuctionHub } from "./lib/auction-hub.mjs";
 import { createAuctionRouter } from "./lib/auction-router.mjs";
+import { ADMIN_KEY_HEADER, createOrganiserGate } from "./lib/organiser-auth.mjs";
+import { createTeamsRouter } from "./lib/teams-router.mjs";
 
 try {
   loadEnvFile();
@@ -26,8 +35,10 @@ try {
   // Fine — the host may inject DATABASE_URL directly.
 }
 
-const port = parseInt(process.env.PORT || "3000", 10);
-const hostname = process.env.HOSTNAME || "localhost";
+const port = parseInt(process.env.PORT || "4000", 10);
+// Bind to every interface by default so a container host (Render) can reach
+// the process; HOST=localhost keeps a dev run private to the machine.
+const host = process.env.HOST || "0.0.0.0";
 
 // Which mode to run in. An explicit NODE_ENV wins; otherwise `npm run dev` is
 // development and everything else (`npm start`, a bare `node server.mjs`, a
@@ -36,8 +47,8 @@ const hostname = process.env.HOSTNAME || "localhost";
 const dev = process.env.NODE_ENV
   ? process.env.NODE_ENV !== "production"
   : process.env.npm_lifecycle_event === "dev";
-// Next, Prisma and the app's own NODE_ENV checks all read this, so make sure
-// they see the mode this server actually decided on.
+// Prisma and the engine's own NODE_ENV checks read this, so make sure they
+// see the mode this server actually decided on.
 process.env.NODE_ENV = dev ? "development" : "production";
 
 // Production may point at its own database. Only honoured in production, so a
@@ -51,53 +62,80 @@ if (!process.env.DATABASE_URL) {
   process.exit(1);
 }
 
+/**
+ * Origins allowed to call the API and open sockets: a comma-separated list in
+ * CORS_ORIGIN. Unset in development means "any origin", so a local frontend on
+ * any port just works; unset in production means no browser origin is allowed
+ * (server-to-server calls, which carry no Origin header, still are).
+ */
+const allowedOrigins = (process.env.CORS_ORIGIN || "")
+  .split(",")
+  .map((origin) => origin.trim().replace(/\/+$/, ""))
+  .filter(Boolean);
+
+function isAllowedOrigin(origin) {
+  if (!origin) return true; // curl, server actions, health checks
+  if (allowedOrigins.length === 0) return dev;
+  return allowedOrigins.includes(origin.replace(/\/+$/, ""));
+}
+
+const corsOptions = {
+  origin(origin, callback) {
+    callback(null, isAllowedOrigin(origin));
+  },
+  methods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", ADMIN_KEY_HEADER],
+  credentials: true,
+};
+
 // --------------------------------------------------------------------- setup
 
 const app = express();
 const httpServer = createServer(app);
 
-const nextApp = next({ dev, hostname, port, httpServer });
-const handle = nextApp.getRequestHandler();
-
 const io = new SocketIOServer(httpServer, {
   path: "/socket.io",
   serveClient: false,
-  // Engine.IO otherwise kills any upgrade it does not recognise, which would
-  // take Next's HMR socket down with it in development.
-  destroyUpgrade: false,
+  cors: corsOptions,
 });
 
 const hub = createAuctionHub({ connectionString: process.env.DATABASE_URL, io });
-
-// The Next app runs in this same process, so its server actions can reach the
-// hub through globalThis to announce that a capsule just started.
-globalThis.__hackgridAuctionHub = hub;
+const { organiserOnly, adminKeyConfigured } = createOrganiserGate({ dev });
 
 // ----------------------------------------------------------------- middleware
 
 app.disable("x-powered-by");
+// Render terminates TLS in front of the service, so the request's protocol and
+// client address arrive in X-Forwarded-* headers.
+app.set("trust proxy", 1);
+app.use(cors(corsOptions));
 app.use(express.json({ limit: "64kb" }));
 
-// Only our own API is logged; Next already logs the requests it handles.
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", at: new Date().toISOString() });
+});
+
 app.use("/api", (req, _res, nextFn) => {
   console.log(`[api] ${req.method} ${req.originalUrl}`);
   nextFn();
 });
 
-app.use("/api/auction", createAuctionRouter({ prisma: hub.prisma, hub, dev }));
+app.use("/api/auction", createAuctionRouter({ prisma: hub.prisma, hub, organiserOnly }));
+app.use("/api/teams", createTeamsRouter({ prisma: hub.prisma, dev }));
+app.use("/api/admin", createAdminRouter({ prisma: hub.prisma, hub, organiserOnly }));
 
-// Anything the API did not claim belongs to Next: pages, assets, server actions.
-app.use((req, res) => {
-  handle(req, res, parse(req.url, true)).catch((error) => {
-    console.error("[server] request failed:", error);
-    if (!res.headersSent) res.status(500).end("Internal server error");
-  });
+app.use((_req, res) => {
+  res.status(404).json({ status: "error", message: "Not found." });
 });
 
 // Express error handler. Express identifies it by its arity, so the fourth
 // argument has to stay even though nothing calls it.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// eslint-disable-next-line no-unused-vars
 app.use((error, _req, res, _nextFn) => {
+  // Malformed JSON from the client is a 400, not a server fault.
+  if (error?.type === "entity.parse.failed") {
+    return res.status(400).json({ status: "error", message: "Malformed JSON body." });
+  }
   console.error("[api] unhandled:", error);
   if (res.headersSent) return;
   res.status(500).json({ status: "error", message: "Internal server error" });
@@ -182,13 +220,27 @@ io.on("connection", async (socket) => {
 
 // ------------------------------------------------------------------- listen
 
-await nextApp.prepare();
 await hub.hydrate().catch((error) => console.error("[server] hydrate failed:", error));
 
-httpServer.listen(port, () => {
+httpServer.listen(port, host, () => {
+  const shown = host === "0.0.0.0" ? "localhost" : host;
+  console.log(`> HackGrid backend ready on http://${shown}:${port} (${process.env.NODE_ENV})`);
+  console.log(`> REST API        http://${shown}:${port}/api/{auction,teams,admin}`);
+  console.log(`> Socket.IO       ws://${shown}:${port}/socket.io`);
   console.log(
-    `> HackGrid ready on http://${hostname}:${port} (${dev ? "development" : process.env.NODE_ENV})`,
+    `> CORS            ${allowedOrigins.length ? allowedOrigins.join(", ") : dev ? "any origin (development)" : "no browser origins (set CORS_ORIGIN)"}`,
   );
-  console.log(`> Express API    http://${hostname}:${port}/api/auction`);
-  console.log(`> Socket.IO      ws://${hostname}:${port}/socket.io`);
+  console.log(
+    `> Organiser API   ${dev ? "open (development)" : adminKeyConfigured ? "x-admin-key required" : "disabled (set ADMIN_API_KEY to enable)"}`,
+  );
 });
+
+// Let the host stop the process cleanly on a redeploy.
+for (const signal of ["SIGINT", "SIGTERM"]) {
+  process.once(signal, () => {
+    console.log(`[server] ${signal} received, shutting down`);
+    io.close();
+    httpServer.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 5000).unref();
+  });
+}

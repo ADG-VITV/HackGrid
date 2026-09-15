@@ -1,10 +1,11 @@
 import type { BidRejectionCode } from "@/lib/auction-rules.mjs";
 
 /**
- * The Socket.IO contract between the browser and the auction server.
+ * The Socket.IO contract between the browser and the auction backend.
  *
- * Socket.IO is mounted on its own path so it never collides with Next's HMR
- * socket, which lives on /_next/hmr.
+ * The backend (a separate deployment, NEXT_PUBLIC_BACKEND_URL) mounts
+ * Socket.IO at this path. The server-side half of this contract is
+ * backend/server.mjs and backend/lib/auction-hub.mjs.
  */
 export const SOCKET_PATH = "/socket.io";
 

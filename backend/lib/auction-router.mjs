@@ -2,9 +2,11 @@
  * Express router for the auction.
  *
  * Everything here is a thin HTTP wrapper over lib/auction-engine.mjs — the same
- * functions the Next server actions and the websocket hub call. There is no
- * second copy of the rules, so an organiser hitting these endpoints and a team
- * using the UI can never disagree about the state of the event.
+ * functions the admin router and the websocket hub call. There is no second
+ * copy of the rules, so an organiser hitting these endpoints and a team using
+ * the UI can never disagree about the state of the event.
+ *
+ * Organiser routes share the gate in lib/organiser-auth.mjs with /api/admin.
  *
  * Mounted at /api/auction by server.mjs.
  */
@@ -22,14 +24,8 @@ import {
 /** Wraps an async handler so a rejected promise reaches Express's error handler. */
 const route = (handler) => (req, res, nextFn) => Promise.resolve(handler(req, res)).catch(nextFn);
 
-export function createAuctionRouter({ prisma, hub, dev }) {
+export function createAuctionRouter({ prisma, hub, organiserOnly }) {
   const router = Router();
-
-  /** Organiser-only in production; open while developing. */
-  function organiserOnly(req, res, nextFn) {
-    if (dev) return nextFn();
-    res.status(403).json({ status: "error", message: "Organiser controls are disabled here." });
-  }
 
   router.get("/health", (_req, res) => {
     res.json({ status: "ok", at: new Date().toISOString() });
@@ -67,7 +63,7 @@ export function createAuctionRouter({ prisma, hub, dev }) {
 
   // Prepare the event: draw pods for every round. Opens nothing — each
   // capsule opens solely when the organiser starts it; nothing chains on its
-  // own. Same function the Next Start-event action calls.
+  // own. Same function the admin router's Start-event route calls.
   router.post(
     "/start",
     organiserOnly,

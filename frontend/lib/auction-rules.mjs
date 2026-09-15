@@ -1,7 +1,8 @@
 /**
- * Auction rules, in plain JS so the custom server (server.mjs) and the Next
- * app can share one copy. Everything here is pure — no DB, no I/O — so the
- * same function decides a bid on the server and previews it in the UI.
+ * Auction rules, in plain JS. Everything here is pure — no DB, no I/O. This
+ * is the frontend's copy of the file the backend decides bids with
+ * (backend/lib/auction-rules.mjs); the UI reads its constants and rejection
+ * codes — keep the two in sync when timings change.
  *
  * Timing matches the existing client architecture:
  *   - each tier gets a 7 minute window once it opens

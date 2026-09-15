@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { io, type Socket } from "socket.io-client";
+import { getPublicBackendUrl } from "@/lib/backend";
 import {
   SOCKET_PATH,
   type BidAck,
@@ -77,9 +78,11 @@ export function useAuctionSocket(
   useEffect(() => {
     if (!podId || !teamId || !email) return;
 
-    // Identity travels in the handshake, where the server's io.use() gate
-    // reads it, rather than in a query string.
-    const socket: AuctionSocket = io({
+    // The backend is its own origin (NEXT_PUBLIC_BACKEND_URL); Socket.IO
+    // connects there directly from the browser. Identity travels in the
+    // handshake, where the server's io.use() gate reads it, rather than in a
+    // query string.
+    const socket: AuctionSocket = io(getPublicBackendUrl() || undefined, {
       path: SOCKET_PATH,
       transports: ["websocket", "polling"],
       auth: { podId, teamId, email },

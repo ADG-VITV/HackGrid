@@ -1,9 +1,9 @@
 /**
  * The four capsules and their tiers.
  *
- * Plain JS so the custom server (which never goes through the Next compiler)
- * and the app can share one definition. `app/bidding/auction-data.ts` re-exports
- * this for the UI.
+ * Plain JS with no dependencies. The frontend repository carries a copy of
+ * this file (frontend/lib/auction-catalog.mjs) so the UI can render the
+ * catalogue without a round trip — keep the two in sync when prices change.
  *
  * Array order is meaningful in two places:
  *   - the order of `auctionTiles` is the running order of the event; capsule N

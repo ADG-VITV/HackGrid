@@ -1,9 +1,9 @@
 /**
  * Capsule and pod lifecycle.
  *
- * Plain JS and free of any transport concerns, so both the Next server action
- * (an organiser pressing Start) and the websocket hub drive the event through
- * the same code.
+ * Plain JS and free of any transport concerns, so the REST routers (an
+ * organiser pressing Start) and the websocket hub drive the event through the
+ * same code.
  *
  * The event runs strictly one capsule at a time, in catalogue order. A capsule
  * opens only when the organiser starts it (Force in development, the admin

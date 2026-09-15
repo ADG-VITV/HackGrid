@@ -1,16 +1,16 @@
 "use server";
 
 /**
- * Thin wrappers so the React UI can call the auction without a fetch round trip.
+ * Thin wrappers so the React UI can read the auction without knowing where
+ * the backend lives.
  *
- * All the behaviour lives in lib/auction-engine.mjs, which the Express router at
- * /api/auction and the websocket hub also call. These actions and that API
- * return the same shapes because they are the same functions.
+ * All the behaviour lives in the backend (lib/auction-engine.mjs there), which
+ * the Express router at /api/auction and the websocket hub both call. These
+ * actions return exactly what that API returns.
  */
 
-import { prisma } from "@/lib/prisma";
+import { BackendError, backendRequest } from "@/lib/backend";
 import { auctionTiles } from "@/lib/auction-catalog.mjs";
-import { getBiddingContext } from "@/lib/auction-engine.mjs";
 
 export type CapsuleContext = {
   key: string;
@@ -86,30 +86,31 @@ const capsuleShell = (): CapsuleContext[] =>
     podKind: null,
   }));
 
+function errorContext(message: string): BiddingContext {
+  return {
+    status: "error",
+    message,
+    team: null,
+    viewerRole: null,
+    currentLot: null,
+    capsules: capsuleShell(),
+    resources: null,
+  };
+}
+
 export async function getBiddingContextAction(teamIdOrEmail: string): Promise<BiddingContext> {
   try {
-    if (!process.env.DATABASE_URL) {
-      return {
-        status: "error",
-        message: "DATABASE_URL is not set.",
-        team: null,
-        viewerRole: null,
-        currentLot: null,
-        capsules: capsuleShell(),
-        resources: null,
-      };
-    }
-    return (await getBiddingContext(prisma, teamIdOrEmail)) as BiddingContext;
+    // A 404 ("Unknown team") still carries the full error context the page
+    // expects, so it is returned as-is rather than thrown.
+    return await backendRequest<BiddingContext>(
+      `/api/auction/context/${encodeURIComponent(teamIdOrEmail)}`,
+    );
   } catch (error) {
     console.error("getBiddingContextAction failed:", error);
-    return {
-      status: "error",
-      message: "Database request failed.",
-      team: null,
-      viewerRole: null,
-      currentLot: null,
-      capsules: capsuleShell(),
-      resources: null,
-    };
+    return errorContext(
+      error instanceof BackendError && error.status === 0
+        ? "Backend is unreachable."
+        : "Database request failed.",
+    );
   }
 }
