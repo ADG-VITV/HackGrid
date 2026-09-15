@@ -21,7 +21,7 @@ export interface NavbarProps {
 
 const navItems = [
   { name: "Home", href: "/#home" },
-  { name: "About", href: "/#about" },
+  { name: "About", href: "/#about-hack" },
   { name: "Timeline", href: "/#timeline" },
   { name: "Rules", href: "/rules" },
   { name: "Bidding", href: "/bidding" },
@@ -50,7 +50,40 @@ function Avatar({ src, alt, name }: { src?: string | null; alt?: string; name?: 
   );
 }
 
+/** Radius of the hover glow, matching the 350px circle the gradient used to draw. */
+const SPOTLIGHT_RADIUS = 350;
+
 const PIXEL_FONT = "'Silkscreen', 'Press Start 2P', 'Pixelify Sans', 'GeistPixelSquare', monospace";
+
+/** How long a section scroll takes. */
+const SCROLL_MS = 600;
+
+/**
+ * Scroll the window so `target` sits under the navbar, honouring the
+ * section's own scroll-margin-top. Tweened by hand rather than
+ * scrollIntoView({ behavior: "smooth" }): that is a no-op wherever smooth
+ * scrolling is off (embedded browsers, reduced-motion), which left the links
+ * doing nothing. Jumps straight there when the viewer asked for less motion.
+ */
+function scrollToSection(target: HTMLElement) {
+  const margin = parseFloat(getComputedStyle(target).scrollMarginTop) || 0;
+  const to = Math.max(0, target.getBoundingClientRect().top + window.scrollY - margin);
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    window.scrollTo(0, to);
+    return;
+  }
+
+  const from = window.scrollY;
+  const start = performance.now();
+  const step = (now: number) => {
+    const t = Math.min(1, (now - start) / SCROLL_MS);
+    const eased = 1 - Math.pow(1 - t, 3);
+    window.scrollTo(0, from + (to - from) * eased);
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
 
 export function Navbar({ user, loading, onSignOut }: NavbarProps) {
   const auth = useAuth();
@@ -61,8 +94,12 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
   const [currentHash, setCurrentHash] = useState("");
   const [isBrandOverdrive, setIsBrandOverdrive] = useState(false);
   const [isScrolled, setIsScrolled] = useState(false);
-  const [spotlightPos, setSpotlightPos] = useState({ x: -200, y: -200 });
-  const [isSpotlightVisible, setIsSpotlightVisible] = useState(false);
+  // The hover spotlight is driven straight from the DOM, not React state: a
+  // state update per mousemove re-rendered the whole navbar 60-120 times a
+  // second and repainted the blurred shell each time. Moving a fixed-size
+  // glow with a transform is a compositor-only change — no render, no paint.
+  const spotlightRef = useRef<HTMLDivElement>(null);
+  const shellRectRef = useRef<DOMRect | null>(null);
   // Props override the auth context when given — including `user={null}`,
   // which means "signed out" rather than "use the session".
   const resolvedUser = user === undefined ? auth.user : user;
@@ -87,7 +124,7 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
     window.addEventListener("popstate", updateHash);
 
     if (pathname === "/") {
-      const sectionIds = ["home", "about", "timeline", "rules"];
+      const sectionIds = ["home", "about-hack", "timeline"];
       const sections = sectionIds
         .map((id) => document.getElementById(id))
         .filter((el): el is HTMLElement => el !== null);
@@ -136,6 +173,26 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
       : pathname.startsWith(href);
   };
 
+  /**
+   * Section links on the home page scroll rather than navigate. Next's Link
+   * would update the hash with pushState, which fires no hashchange, so the
+   * active highlight has to be set here too. From any other page the Link
+   * navigates to "/" and Next scrolls to the id once it lands.
+   */
+  const handleNavClick = (event: React.MouseEvent<HTMLAnchorElement>, href: string) => {
+    setIsMenuOpen(false);
+    if (!href.startsWith("/#") || pathname !== "/") return;
+
+    const id = href.slice(2);
+    const target = document.getElementById(id);
+    if (!target) return;
+
+    event.preventDefault();
+    scrollToSection(target);
+    window.history.pushState(null, "", id === "home" ? "/" : `#${id}`);
+    setCurrentHash(`#${id}`);
+  };
+
   useEffect(() => {
     const handlePointerDown = (event: MouseEvent) => {
       if (!navRef.current?.contains(event.target as Node)) {
@@ -164,7 +221,7 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
     <header
       ref={navRef}
       data-hero-navbar
-      className={`${GeistPixelSquare.variable} ${GeistPixelSquare.className} fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6 lg:px-10 transition-all duration-300 ${
+      className={`${GeistPixelSquare.variable} ${GeistPixelSquare.className} fixed inset-x-0 top-0 z-50 px-4 pt-4 sm:px-6 lg:px-10 ${
         isBrandOverdrive ? "hg-brand-overdrive" : ""
       }`}
       style={{
@@ -175,25 +232,39 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
     >
       <div className="relative mx-auto max-w-[1440px]">
         <div
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            setSpotlightPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-            setIsSpotlightVisible(true);
+          onMouseEnter={(e) => {
+            // Measured once per hover, not per move — a layout read on every
+            // mousemove would force a reflow each frame.
+            shellRectRef.current = e.currentTarget.getBoundingClientRect();
           }}
-          onMouseLeave={() => setIsSpotlightVisible(false)}
-          className={`hg-nav-shell group relative z-10 overflow-hidden rounded-2xl sm:rounded-3xl border transition-all duration-300 px-4 sm:px-8 backdrop-blur-2xl ${
+          onMouseMove={(e) => {
+            const glow = spotlightRef.current;
+            const rect = shellRectRef.current;
+            if (!glow || !rect) return;
+            glow.style.transform = `translate3d(${e.clientX - rect.left - SPOTLIGHT_RADIUS}px, ${e.clientY - rect.top - SPOTLIGHT_RADIUS}px, 0)`;
+            glow.style.opacity = "1";
+          }}
+          onMouseLeave={() => {
+            if (spotlightRef.current) spotlightRef.current.style.opacity = "0";
+          }}
+          className={`hg-nav-shell group relative z-10 overflow-hidden rounded-2xl sm:rounded-3xl border transition-[background-color,border-color,box-shadow] duration-300 px-4 sm:px-8 backdrop-blur-lg ${
             isScrolled
               ? "border-[#42ff5a]/30 bg-black/85 shadow-[0_28px_80px_rgba(0,0,0,0.6),0_0_30px_rgba(66,255,90,0.10),inset_0_1px_0_rgba(255,255,255,0.2)]"
               : "border-white/15 bg-white/[0.07] shadow-[0_24px_70px_rgba(0,0,0,0.32),inset_0_1px_0_rgba(255,255,255,0.16)]"
           } ${isBrandOverdrive ? "hg-brand-overdrive" : ""}`}
         >
-          {/* Interactive Mouse Spotlight Tracker */}
+          {/* Hover spotlight: a fixed-size glow moved under the pointer with a
+              transform (see spotlightRef above). */}
           <div
+            ref={spotlightRef}
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-300"
+            className="pointer-events-none absolute left-0 top-0 z-0 rounded-full opacity-0 transition-opacity duration-300 will-change-transform"
             style={{
-              opacity: isSpotlightVisible ? 1 : 0,
-              background: `radial-gradient(350px circle at ${spotlightPos.x}px ${spotlightPos.y}px, rgba(66, 255, 90, 0.16), rgba(66, 255, 90, 0.03) 45%, transparent 80%)`,
+              width: SPOTLIGHT_RADIUS * 2,
+              height: SPOTLIGHT_RADIUS * 2,
+              transform: "translate3d(-9999px, -9999px, 0)",
+              background:
+                "radial-gradient(circle, rgba(66, 255, 90, 0.16), rgba(66, 255, 90, 0.03) 45%, transparent 80%)",
             }}
           />
 
@@ -229,6 +300,7 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
                   <Link
                     key={item.name}
                     href={item.href}
+                    onClick={(event) => handleNavClick(event, item.href)}
                     aria-current={active ? "page" : undefined}
                     onPointerEnter={(event) => {
                       const rect = event.currentTarget.getBoundingClientRect();
@@ -386,7 +458,7 @@ export function Navbar({ user, loading, onSignOut }: NavbarProps) {
                     <Link
                       key={item.name}
                       href={item.href}
-                      onClick={() => setIsMenuOpen(false)}
+                      onClick={(event) => handleNavClick(event, item.href)}
                       aria-current={active ? "page" : undefined}
                       className={`hg-mobile-link group/item flex items-center justify-between rounded-xl border px-4 py-3 font-medium transition-all ${
                         active
