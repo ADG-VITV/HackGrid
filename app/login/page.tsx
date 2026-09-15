@@ -1,8 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
+import { useViewer } from "@/lib/use-viewer";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   GoogleAuthProvider,
@@ -13,8 +14,15 @@ import { auth } from "@/lib/firebase";
 
 export default function LoginPage() {
   const router = useRouter();
+  const viewer = useViewer();
   const [isLoading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (viewer.signedIn) {
+      router.replace("/teams");
+    }
+  }, [router, viewer.signedIn]);
 
   const handleGoogleLogin = async () => {
     setLoading(true);
@@ -25,7 +33,7 @@ export default function LoginPage() {
 
       await signInWithPopup(auth, provider);
 
-      router.push("/teams");
+      router.replace("/teams");
     } catch (error) {
       console.error("Google login failed:", error);
       setError("Unable to sign in with Google. Please try again.");
@@ -33,6 +41,16 @@ export default function LoginPage() {
       setLoading(false);
     }
   };
+
+  if (viewer.loading || viewer.signedIn) {
+    return (
+      <div className="relative flex min-h-[100vh] items-center justify-center overflow-hidden bg-black">
+        <div className="rounded-xl border border-neon/20 bg-zinc-950/60 px-4 py-2 font-mono text-[0.65rem] tracking-[0.14em] text-zinc-500 uppercase">
+          {viewer.signedIn ? "Opening teams..." : "Checking session..."}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-[100vh] flex items-center justify-center bg-black relative overflow-hidden">
